@@ -66,36 +66,12 @@ st.markdown(f"""
         }}
     }}
     
-    /* Realistic Login Page Styling */
-    .login-page {{
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        min-height: 100vh;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 2rem;
-    }}
-    
-    .login-card {{
-        background: white;
-        border-radius: 20px;
-        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-        padding: 3rem 2.5rem;
+    /* Clean Login Page Styling */
+    .login-container {{
         max-width: 450px;
-        width: 100%;
+        margin: 3rem auto;
+        padding: 2rem;
         text-align: center;
-        animation: slideIn 0.5s ease-out;
-    }}
-    
-    @keyframes slideIn {{
-        from {{
-            opacity: 0;
-            transform: translateY(-30px);
-        }}
-        to {{
-            opacity: 1;
-            transform: translateY(0);
-        }}
     }}
     
     .bell-icon {{
@@ -125,8 +101,8 @@ st.markdown(f"""
     }}
     
     .login-subtitle {{
-        color: #667eea;
-        font-size: 1.2rem;
+        color: #FF4B4B;
+        font-size: 1.3rem;
         margin-bottom: 0.3rem;
         font-weight: 600;
     }}
@@ -134,51 +110,19 @@ st.markdown(f"""
     .login-subtitle-en {{
         color: #718096;
         font-size: 0.95rem;
-        margin-bottom: 2rem;
+        margin-bottom: 2.5rem;
     }}
     
     .divider {{
         height: 2px;
-        background: linear-gradient(to right, transparent, #667eea, transparent);
+        background: linear-gradient(to right, transparent, #FF4B4B, transparent);
         margin: 1.5rem 0;
     }}
     
-    /* Input field styling */
-    .stTextInput > div > div > input {{
-        border-radius: 10px;
-        border: 2px solid #e2e8f0;
-        padding: 0.75rem 1rem;
-        font-size: 1rem;
-        transition: all 0.3s ease;
-    }}
-    
-    .stTextInput > div > div > input:focus {{
-        border-color: #667eea;
-        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-    }}
-    
-    /* Button styling */
-    .stButton > button {{
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        border: none;
-        border-radius: 10px;
-        padding: 0.75rem 2rem;
-        font-size: 1.1rem;
-        font-weight: 600;
-        cursor: pointer;
-        transition: all 0.3s ease;
-        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
-    }}
-    
-    .stButton > button:hover {{
-        transform: translateY(-2px);
-        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
-    }}
-    
     @media screen and (max-width: 768px) {{
-        .login-card {{
-            padding: 2rem 1.5rem;
+        .login-container {{
+            padding: 1.5rem;
+            margin: 2rem auto;
         }}
         .bell-icon {{
             width: 90px;
@@ -188,7 +132,7 @@ st.markdown(f"""
             font-size: 1.5rem;
         }}
         .login-subtitle {{
-            font-size: 1rem;
+            font-size: 1.1rem;
         }}
     }}
     </style>
@@ -204,51 +148,43 @@ def check_login(username, password):
 
 # Login page
 def login_page():
-    # Create background and card
-    st.markdown('<div class="login-page">', unsafe_allow_html=True)
+    # Create centered container
+    st.markdown('<div class="login-container">', unsafe_allow_html=True)
     
-    # Create centered card
-    col1, col2, col3 = st.columns([1, 2, 1])
+    # Display bell icon
+    if bell_image_base64:
+        st.markdown(f'''
+            <div class="bell-icon">
+                <img src="data:image/png;base64,{bell_image_base64}" style="width: 100%; height: 100%;" />
+            </div>
+        ''', unsafe_allow_html=True)
+    else:
+        st.markdown('<div class="bell-icon">🔔</div>', unsafe_allow_html=True)
     
-    with col2:
-        st.markdown('<div class="login-card">', unsafe_allow_html=True)
+    # Title
+    st.markdown('<div class="login-title">🔐 सुरक्षित प्रवेश</div>', unsafe_allow_html=True)
+    st.markdown('<div class="login-subtitle">मतदाता सूची खोज प्रणाली</div>', unsafe_allow_html=True)
+    st.markdown('<div class="login-subtitle-en">Voter List Search System</div>', unsafe_allow_html=True)
+    
+    st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+    
+    # Login form
+    with st.form("login_form", clear_on_submit=False):
+        username = st.text_input("👤 प्रयोगकर्ता नाम / Username", key="username", placeholder="Enter your username")
+        password = st.text_input("🔒 पासवर्ड / Password", type="password", key="password", placeholder="Enter your password")
         
-        # Display bell icon
-        if bell_image_base64:
-            st.markdown(f'''
-                <div class="bell-icon">
-                    <img src="data:image/png;base64,{bell_image_base64}" style="width: 100%; height: 100%;" />
-                </div>
-            ''', unsafe_allow_html=True)
-        else:
-            st.markdown('<div class="bell-icon">🔔</div>', unsafe_allow_html=True)
+        st.markdown("<br>", unsafe_allow_html=True)
         
-        # Title
-        st.markdown('<div class="login-title">🔐 सुरक्षित प्रवेश</div>', unsafe_allow_html=True)
-        st.markdown('<div class="login-subtitle">मतदाता सूची खोज प्रणाली</div>', unsafe_allow_html=True)
-        st.markdown('<div class="login-subtitle-en">Voter List Search System</div>', unsafe_allow_html=True)
+        submit = st.form_submit_button("🔓 लगइन गर्नुहोस् / Login", use_container_width=True)
         
-        st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
-        
-        # Login form
-        with st.form("login_form", clear_on_submit=False):
-            username = st.text_input("👤 प्रयोगकर्ता नाम / Username", key="username", placeholder="Enter your username")
-            password = st.text_input("🔒 पासवर्ड / Password", type="password", key="password", placeholder="Enter your password")
-            
-            st.markdown("<br>", unsafe_allow_html=True)
-            
-            submit = st.form_submit_button("🔓 लगइन गर्नुहोस् / Login", use_container_width=True)
-            
-            if submit:
-                if check_login(username, password):
-                    st.session_state.logged_in = True
-                    st.success("✅ लगइन सफल भयो! / Login Successful!")
-                    st.balloons()
-                    st.rerun()
-                else:
-                    st.error("❌ गलत प्रयोगकर्ता नाम वा पासवर्ड / Invalid Credentials")
-        
-        st.markdown('</div>', unsafe_allow_html=True)
+        if submit:
+            if check_login(username, password):
+                st.session_state.logged_in = True
+                st.success("✅ लगइन सफल भयो! / Login Successful!")
+                st.balloons()
+                st.rerun()
+            else:
+                st.error("❌ गलत प्रयोगकर्ता नाम वा पासवर्ड / Invalid Credentials")
     
     st.markdown('</div>', unsafe_allow_html=True)
 
