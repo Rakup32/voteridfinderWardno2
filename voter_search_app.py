@@ -1,5 +1,6 @@
 import pandas as pd
 import streamlit as st
+from credentials import USERNAME, PASSWORD
 
 # Set page configuration
 st.set_page_config(
@@ -76,13 +77,13 @@ st.markdown("""
 if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
 
-# Login credentials
-CORRECT_USERNAME = "Pukar"
-CORRECT_PASSWORD = "Rakup32"
+# Initialize default search option
+if 'default_loaded' not in st.session_state:
+    st.session_state.default_loaded = False
 
 # Login function
 def check_login(username, password):
-    return username == CORRECT_USERNAME and password == CORRECT_PASSWORD
+    return username == USERNAME and password == PASSWORD
 
 # Login page
 def login_page():
@@ -111,6 +112,7 @@ def login_page():
 # Logout function
 def logout():
     st.session_state.logged_in = False
+    st.session_state.default_loaded = False
     st.rerun()
 
 # Load data
@@ -138,11 +140,15 @@ def main_app():
         # Sidebar for search options
         st.sidebar.header("खोज विकल्प")
         
+        # Set default to advanced search on first load
+        default_index = 7  # Index for "उन्नत खोज (सबै फिल्टर)"
+        
         search_option = st.sidebar.selectbox(
             "खोज प्रकार छान्नुहोस्:",
             ["सबै डाटा हेर्नुहोस्", "मतदाताको नामबाट खोज्नुहोस्", "मतदाता नंबरबाट खोज्नुहोस्", 
              "पिता/माताको नामबाट खोज्नुहोस्", "पति/पत्नीको नामबाट खोज्नुहोस्",
-             "लिङ्गबाट फिल्टर गर्नुहोस्", "उमेर दायराबाट खोज्नुहोस्", "उन्नत खोज (सबै फिल्टर)"]
+             "लिङ्गबाट फिल्टर गर्नुहोस्", "उमेर दायराबाट खोज्नुहोस्", "उन्नत खोज (सबै फिल्टर)"],
+            index=default_index
         )
         
         # Display based on search option
