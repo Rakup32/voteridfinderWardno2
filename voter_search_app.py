@@ -4,7 +4,6 @@ import pandas as pd
 import streamlit as st
 import base64
 import time
-# NEW IMPORT: For persistent login (cookies)
 import extra_streamlit_components as stx
 from credentials import USERNAME, PASSWORD
 
@@ -26,13 +25,10 @@ st.set_page_config(
     initial_sidebar_state="auto"
 )
 
-# --- COOKIE MANAGER SETUP (FIX FOR REFRESH ISSUE) ---
-@st.cache_resource(experimental_allow_widgets=True)
-def get_manager():
-    return stx.CookieManager()
-
-cookie_manager = get_manager()
-# ----------------------------------------------------
+# --- COOKIE MANAGER SETUP (FIXED) ---
+# We instantiate this directly without caching to avoid the TypeError
+cookie_manager = stx.CookieManager()
+# ------------------------------------
 
 # Function to convert image to base64
 def get_base64_image(image_path):
@@ -77,6 +73,7 @@ st.markdown("""
 # --- LOGIN LOGIC WITH COOKIES ---
 
 # 1. Check if user is already logged in via Cookie
+time.sleep(0.1) # Small delay to ensure cookies load
 cookies = cookie_manager.get_all()
 if 'voter_auth' in cookies and cookies['voter_auth'] == 'true':
     st.session_state.logged_in = True
