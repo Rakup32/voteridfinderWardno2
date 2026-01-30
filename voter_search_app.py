@@ -95,7 +95,7 @@ def login_page():
         <span class="login-badge">Secure access</span>
         <div class="login-title">सुरक्षित प्रवेश</div>
         <div class="login-subtitle">मतदाता सूची खोज प्रणाली</div>
-        <div class="login-subtitle-en">Baratpur ward no-02 Voter List Search System</div>
+        <div class="login-subtitle-en">Bharatpur Ward No-02 Voter List Search System</div>
     </div>
     <div class="login-divider"></div>
     </div>
@@ -180,7 +180,7 @@ def show_results_table(data, columns):
 
 def main_app():
     st.title("🗳️ मतदाता सूची खोज प्रणाली")
-    st.markdown("**Voter List Search System**")
+    st.markdown("**Bharatpur Ward No-02 Voter mVoter List Search System**")
     
     with st.sidebar:
         if st.button("🚪 Logout / बाहिर निस्कनुहोस्", use_container_width=True):
