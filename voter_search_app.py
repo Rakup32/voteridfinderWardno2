@@ -137,8 +137,10 @@ STANDARD_COLUMNS = [
     'पति/पत्नीको नाम', 'पिता/माताको नाम'
 ]
 
-@st.cache_data
+# --- IMPLEMENTED CACHE OPTIMIZATION HERE ---
+@st.cache_data(show_spinner="डाटा लोड गर्दै... / Loading data...")
 def load_data():
+    """Reads the Excel file and caches it to speed up the application."""
     df = pd.read_excel('voterlist.xlsx')
     try:
         df.columns = df.columns.str.strip()
@@ -149,7 +151,6 @@ def load_data():
         df['उमेर(वर्ष)'] = pd.to_numeric(df['उमेर(वर्ष)'], errors='coerce')
 
     # Create helper columns for search (ending in _lower)
-    # These will be hidden from the final view automatically
     if 'मतदाताको नाम' in df.columns:
         df['मतदाताको नाम_lower'] = df['मतदाताको नाम'].astype(str).map(lambda s: _normalize_unicode(s))
     if 'पिता/माताको नाम' in df.columns:
@@ -160,21 +161,17 @@ def load_data():
         df['पति/पत्नीको नाम_lower'] = df['पति/पत्नीको नाम_lower'].fillna('-')
 
     return df
+# ---------------------------------------------
 
 def get_display_columns(df):
     """
     Returns ALL columns from the Excel file, excluding internal helper columns.
     Preserves the order of STANDARD_COLUMNS first, then appends any new columns found.
     """
-    # 1. Start with standard columns if they exist in the file
     final_cols = [c for c in STANDARD_COLUMNS if c in df.columns]
-    
-    # 2. Add any NEW columns that are in the file but not in standard list
-    #    And explicitly exclude our internal '_lower' helper columns
     for c in df.columns:
         if c not in final_cols and not c.endswith('_lower'):
             final_cols.append(c)
-            
     return final_cols
 
 def unicode_prefix_search(df, column, search_term):
@@ -183,12 +180,9 @@ def unicode_prefix_search(df, column, search_term):
     normalized = _normalize_unicode(search_term)
     if not normalized:
         return df
-    
-    # Check if helper column exists
     lower_col = column + "_lower"
     if lower_col not in df.columns:
         return df
-        
     mask = df[lower_col].str.startswith(normalized, na=False)
     return df[mask]
 
@@ -211,10 +205,9 @@ def main_app():
     st.markdown("---")
     
     try:
-        with st.spinner('डाटा लोड गर्दै... / Loading data...'):
-            df = load_data()
+        # load_data() now uses the cache!
+        df = load_data()
 
-        # Get all valid display columns (Standard + Any New Columns)
         display_columns = get_display_columns(df)
         
         if not display_columns:
