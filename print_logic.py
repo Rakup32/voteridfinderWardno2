@@ -3,14 +3,20 @@ import pandas as pd
 
 def generate_printable_card(row):
     """
-    Generates the HTML for a printable voter card and displays it in a dialog.
+    Generates the HTML for a printable voter card.
     """
-    # Safe handling of missing values
-    voter_no = row.get('मतदाता नं', '-')
-    serial_no = row.get('सि.नं.', '-')
-    name = row.get('मतदाताको नाम', '-')
-    parent = row.get('पिता/माताको नाम', '-')
-    spouse = row.get('पति/पत्नीको नाम', '-')
+    # Safe handling of missing values (converts NaN to '-')
+    def safe_get(key):
+        val = row.get(key, '-')
+        if pd.isna(val) or str(val).strip() == '':
+            return '-'
+        return str(val)
+
+    voter_no = safe_get('मतदाता नं')
+    serial_no = safe_get('सि.नं.')
+    name = safe_get('मतदाताको नाम')
+    parent = safe_get('पिता/माताको नाम')
+    spouse = safe_get('पति/पत्नीको नाम')
 
     # HTML for the card
     card_html = f"""
@@ -58,22 +64,18 @@ def generate_printable_card(row):
     </div>
     """
 
-    # 1. Display the Card
     st.markdown(card_html, unsafe_allow_html=True)
     st.markdown("---")
 
-    # 2. JavaScript to Print ONLY the Card
-    # This script hides everything on the page except the #print-area div when printing
+    # JavaScript to Print ONLY the Card
     print_js = """
     <script>
     function printDiv() {
         var printContents = document.getElementById('print-area').innerHTML;
         var originalContents = document.body.innerHTML;
-
         document.body.innerHTML = printContents;
         window.print();
         document.body.innerHTML = originalContents;
-        // Reload to restore event listeners (Streamlit requirement)
         window.location.reload(); 
     }
     </script>
@@ -82,7 +84,4 @@ def generate_printable_card(row):
 
 @st.dialog("मतदाता विवरण (Voter Details)")
 def show_voter_popup(row_data):
-    """
-    Opens the Streamlit Dialog (Popup)
-    """
     generate_printable_card(row_data)
