@@ -15,14 +15,24 @@ A Streamlit-based application for quickly searching through Nepali voter list da
 
 1. Install required Python packages:
 ```bash
-pip install streamlit pandas openpyxl
+pip install -r requirements.txt
 ```
+
+2. **Set login credentials** (required for login):
+   - Copy `.env.example` to `.env`
+   - Edit `.env` and set your username and password:
+   ```
+   VOTER_APP_USERNAME=your_username
+   VOTER_APP_PASSWORD=your_password
+   ```
+   - Or set the environment variables `VOTER_APP_USERNAME` and `VOTER_APP_PASSWORD` in your system.
 
 ## File Structure
 
 Make sure you have these files in the same directory:
 - `voter_search_app.py` - Main application file
 - `voterlist.xlsx` - Your Excel file with voter data
+- `.env` - Your login credentials (create from `.env.example`; do not commit)
 
 ## How to Run
 
@@ -57,9 +67,7 @@ The application preserves the original Excel data format:
 ## Requirements
 
 - Python 3.7+
-- streamlit
-- pandas
-- openpyxl
+- streamlit, pandas, openpyxl, python-dotenv (see `requirements.txt`)
 
 ## Notes
 
