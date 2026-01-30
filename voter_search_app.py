@@ -6,8 +6,7 @@ import base64
 import time
 import extra_streamlit_components as stx
 from credentials import USERNAME, PASSWORD
-# NEW IMPORT
-import print_logic
+import print_logic  # Ensure this file exists in the same folder
 
 def _normalize_unicode(s):
     """Normalize to NFC for consistent Unicode-aware Nepali character comparison."""
@@ -179,10 +178,11 @@ def unicode_prefix_search(df, column, search_term):
     mask = df[lower_col].str.startswith(normalized, na=False)
     return df[mask]
 
-# --- UPDATED TABLE FUNCTION (WITH SELECTION LOGIC) ---
-def show_results_table(data, columns):
+# --- UPDATED TABLE FUNCTION (WITH ROBUST POPUP LOGIC) ---
+def show_results_table(data, columns, table_key):
     """
     Displays table. Handles Selection to show Popup.
+    Uses Session State to ensure popup survives reload.
     """
     if data.empty:
         return
@@ -192,23 +192,38 @@ def show_results_table(data, columns):
     
     st.info("👆 विवरण हेर्न र प्रिन्ट गर्न तालिकाको कुनै एक पङ्क्तिमा क्लिक गर्नुहोस् (Click a row to Print details)")
 
-    # Enable selection mode
+    # Enable selection mode with a unique KEY
     event = st.dataframe(
         data[columns], 
         use_container_width=True, 
         height=display_height,
         hide_index=True,
         on_select="rerun",  # Triggers app rerun when clicked
-        selection_mode="single-row"
+        selection_mode="single-row",
+        key=table_key # CRITICAL: Ensures selection persists after reload
     )
 
-    # If user selected a row
+    # If user selects a row, save it to session state immediately
     if event.selection.rows:
         selected_index = event.selection.rows[0]
-        selected_row = data.iloc[selected_index]
+        if selected_index < len(data):
+            # We save the selected row to session state "active_voter_card"
+            st.session_state['active_voter_card'] = data.iloc[selected_index]
+
+    # CHECK SESSION STATE: If we have a voter stored, show the popup
+    # This ensures that even if the page "reloads" and event.selection is lost, 
+    # the popup stays open until closed.
+    if 'active_voter_card' in st.session_state:
+        # Check if this table was the one that triggered it (optional but good practice)
+        # For now, we just show it if data exists.
         
-        # Call the popup function from the NEW file
-        print_logic.show_voter_popup(selected_row)
+        # Call the popup function from the print_logic file
+        # st.dialog handles the "is open" logic. We just call it.
+        try:
+            print_logic.show_voter_popup(st.session_state['active_voter_card'])
+        except Exception as e:
+            st.error(f"Popup Error: {e}")
+
 # -----------------------------------------------------
 
 def main_app():
@@ -241,11 +256,11 @@ def main_app():
             index=default_index
         )
         
-        # Pass filtered_df to show_results_table in all sections below
+        # We pass unique table_keys to ensure Streamlit tracks them separately
         
         if search_option == "सबै डाटा हेर्नुहोस्":
             st.subheader("सम्पूर्ण मतदाता सूची")
-            show_results_table(df, display_columns)
+            show_results_table(df, display_columns, "table_all")
             st.info(f"कुल मतदाता संख्या: {len(df):,}")
         
         elif search_option == "मतदाताको नामबाट खोज्नुहोस्":
@@ -256,7 +271,7 @@ def main_app():
                 filtered_df = unicode_prefix_search(df, 'मतदाताको नाम', search_name)
                 if not filtered_df.empty:
                     st.success(f"✅ {len(filtered_df):,} मतदाता भेटियो")
-                    show_results_table(filtered_df, display_columns)
+                    show_results_table(filtered_df, display_columns, "table_name")
                 else:
                     st.warning("कुनै पनि मतदाता भेटिएन")
         
@@ -268,7 +283,7 @@ def main_app():
                     filtered_df = df[df['मतदाता नं'] == int(search_number)]
                     if not filtered_df.empty:
                         st.success("✅ मतदाता भेटियो")
-                        show_results_table(filtered_df, display_columns)
+                        show_results_table(filtered_df, display_columns, "table_number")
                     else:
                         st.warning("कुनै पनि मतदाता भेटिएन")
                 except ValueError:
@@ -281,7 +296,7 @@ def main_app():
                 filtered_df = unicode_prefix_search(df, 'पिता/माताको नाम', search_parent)
                 if not filtered_df.empty:
                     st.success(f"✅ {len(filtered_df):,} भेटियो")
-                    show_results_table(filtered_df, display_columns)
+                    show_results_table(filtered_df, display_columns, "table_parent")
                 else:
                     st.warning("भेटिएन")
 
@@ -293,7 +308,7 @@ def main_app():
                 filtered_df = filtered_df[filtered_df['पति/पत्नीको नाम'] != '-']
                 if not filtered_df.empty:
                     st.success(f"✅ {len(filtered_df):,} भेटियो")
-                    show_results_table(filtered_df, display_columns)
+                    show_results_table(filtered_df, display_columns, "table_spouse")
                 else:
                     st.warning("भेटिएन")
 
@@ -307,7 +322,7 @@ def main_app():
             else:
                 filtered_df = df[df['लिङ्ग'] == selected_gender]
             st.success(f"✅ {len(filtered_df):,} मतदाता भेटियो")
-            show_results_table(filtered_df, display_columns)
+            show_results_table(filtered_df, display_columns, "table_gender")
 
         elif search_option == "उमेर दायराबाट खोज्नुहोस्":
             st.subheader("उमेर दायराबाट खोज्नुहोस्")
@@ -318,7 +333,7 @@ def main_app():
             in_range = (df['उमेर(वर्ष)'] >= min_age) & (df['उमेर(वर्ष)'] <= max_age)
             filtered_df = df[age_ok & in_range]
             st.success(f"✅ {len(filtered_df):,} मतदाता भेटियो")
-            show_results_table(filtered_df, display_columns)
+            show_results_table(filtered_df, display_columns, "table_age")
 
         elif search_option == "उन्नत खोज (सबै फिल्टर)":
             st.subheader("🔍 उन्नत खोज")
@@ -352,7 +367,7 @@ def main_app():
                 st.markdown("---")
                 if not filtered_df.empty:
                     st.success(f"✅ {len(filtered_df):,} मतदाता भेटियो")
-                    show_results_table(filtered_df, display_columns)
+                    show_results_table(filtered_df, display_columns, "table_advanced")
                 else:
                     st.warning("कुनै पनि मतदाता भेटिएन")
 
