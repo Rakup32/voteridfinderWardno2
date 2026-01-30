@@ -1,0 +1,28 @@
+# Credentials and secrets - never commit
+credentials.py
+.env
+.env.local
+*.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+.venv/
+env/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Optional: large data files (uncomment if voterlist.xlsx should not be in repo)
+# voterlist.xlsx
