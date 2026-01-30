@@ -64,6 +64,8 @@ st.markdown("""
     .login-footer { margin-top: 1.5rem; font-size: 0.75rem; color: #a0aec0; text-align: center; }
     .main .block-container > div:has(.login-wrapper) { margin-bottom: 0 !important; }
     .main [data-testid="stForm"] { max-width: 400px; margin-left: auto !important; margin-right: auto !important; }
+    .print-info-box { background: #e6fffa; border-left: 4px solid #38b2ac; padding: 1rem; margin: 0.5rem 0; border-radius: 4px; }
+    .voter-card { background: #f7fafc; border: 1px solid #e2e8f0; padding: 0.75rem; margin: 0.5rem 0; border-radius: 6px; }
     @media screen and (max-width: 768px) { .main { padding: 0.5rem 0.75rem; } h1 { font-size: 1.35rem !important; } }
     @media screen and (max-width: 480px) { .main { padding: 0.4rem 0.5rem; } h1 { font-size: 1.2rem !important; } }
     </style>
@@ -193,49 +195,74 @@ def unicode_prefix_search(df, column, search_term):
     return df[mask]
 
 def show_results_table_with_print(data, columns):
-    """Display results table with print buttons for each row."""
+    """Display results table with print buttons for each row - IMPROVED VERSION."""
     if data.empty:
         return
     
-    # Display basic table info
-    st.caption(f"📊 मतदाता संख्या: {len(data):,}")
+    # Info box explaining the print feature
+    st.markdown("""
+    <div class="print-info-box">
+        <strong>🖨️ प्रिन्ट मोड सक्रिय छ / Print Mode Active</strong><br>
+        📋 प्रत्येक मतदातामा क्लिक गर्नुहोस् र Print बटन थिच्नुहोस्।<br>
+        💡 Click on each voter card and press the Print button to view/download receipt.
+    </div>
+    """, unsafe_allow_html=True)
     
-    # Add print buttons in an expander for each row
+    st.caption(f"📊 कुल मतदाता: {len(data):,}")
+    
+    # Display each voter in an expander
     for idx, row in data.iterrows():
-        with st.expander(f"🗳️ {row.get('मतदाताको नाम', 'N/A')} - मतदाता नं: {row.get('मतदाता नं', 'N/A')}"):
+        voter_name = row.get('मतदाताको नाम', 'N/A')
+        voter_num = row.get('मतदाता नं', 'N/A')
+        
+        with st.expander(f"🗳️ {voter_name} — मतदाता नं: {voter_num}", expanded=False):
             col1, col2 = st.columns([3, 1])
             
             with col1:
-                # Display voter information
+                # Display voter information in a clean format
+                st.markdown('<div class="voter-card">', unsafe_allow_html=True)
                 for col in columns:
-                    if col in row.index:
-                        st.text(f"{col}: {row[col]}")
+                    if col in row.index and col != 'मतदाता विवरणहरू':
+                        value = row[col] if pd.notna(row[col]) else '-'
+                        st.text(f"{col}: {value}")
+                st.markdown('</div>', unsafe_allow_html=True)
             
             with col2:
-                # Print button
-                if st.button("🖨️ Print", key=f"print_btn_{idx}"):
+                # Print button with unique key
+                if st.button("🖨️ मुद्रण गर्नुहोस्\n(Print)", key=f"print_btn_{idx}", use_container_width=True):
+                    # Set session state to show preview
                     st.session_state[f'show_print_{idx}'] = True
             
-            # Show print preview if button clicked
+            # Show print preview if button was clicked
             if st.session_state.get(f'show_print_{idx}', False):
                 st.markdown("---")
+                st.info("📄 **रसिद पूर्वावलोकन / Receipt Preview** — 58mm थर्मल प्रिन्टर")
+                
                 voter_dict = row.to_dict()
                 receipt_text = format_voter_receipt(voter_dict)
                 
+                # Show the formatted receipt
                 st.code(receipt_text, language=None)
                 
                 # Download button
-                st.download_button(
-                    label="💾 Download Receipt",
-                    data=receipt_text,
-                    file_name=f"voter_{row.get('मतदाता नं', idx)}.txt",
-                    mime="text/plain",
-                    key=f"download_{idx}"
-                )
+                col_d1, col_d2 = st.columns(2)
+                with col_d1:
+                    st.download_button(
+                        label="💾 रसिद डाउनलोड गर्नुहोस् (Download Receipt)",
+                        data=receipt_text,
+                        file_name=f"voter_{voter_num}.txt",
+                        mime="text/plain",
+                        key=f"download_{idx}",
+                        use_container_width=True
+                    )
                 
-                if st.button("❌ Close Preview", key=f"close_{idx}"):
-                    st.session_state[f'show_print_{idx}'] = False
-                    st.rerun()
+                with col_d2:
+                    # Close button WITHOUT st.rerun() - just updates session state
+                    if st.button("❌ बन्द गर्नुहोस् (Close)", key=f"close_{idx}", use_container_width=True):
+                        st.session_state[f'show_print_{idx}'] = False
+                        # NO st.rerun() here! Just set state to False
+                        # User needs to click the card again to collapse it naturally
+                        st.info("💡 रसिद बन्द भयो। कार्ड बन्द गर्न यसलाई पुनः क्लिक गर्नुहोस् / Preview closed. Click card header to collapse.")
 
 def show_results_table(data, columns):
     """Standard table display without print buttons."""
@@ -270,12 +297,17 @@ def main_app():
         
         # Add display mode toggle
         st.sidebar.markdown("---")
+        st.sidebar.subheader("प्रदर्शन मोड / Display Mode")
         display_mode = st.sidebar.radio(
-            "प्रदर्शन मोड / Display Mode:",
-            ["📋 Table View", "🖨️ Print View"],
-            index=0
+            "मोड छान्नुहोस् / Select Mode:",
+            ["📋 Table View (तालिका)", "🖨️ Print View (प्रिन्ट)"],
+            index=0,
+            help="Table View: सबै मतदाता एकै पटक हेर्नुहोस् | Print View: प्रत्येक मतदाता प्रिन्ट गर्न सकिन्छ"
         )
-        use_print_view = (display_mode == "🖨️ Print View")
+        use_print_view = (display_mode == "🖨️ Print View (प्रिन्ट)")
+        
+        if use_print_view:
+            st.sidebar.info("🖨️ **Print Mode Active**\n\nप्रत्येक मतदातामा Print बटन देखिनेछ।\nEach voter will have a Print button.")
         
         st.sidebar.markdown("---")
         
