@@ -7,7 +7,6 @@ import time
 import extra_streamlit_components as stx
 from credentials import USERNAME, PASSWORD
 
-
 def _normalize_unicode(s):
     """Normalize to NFC for consistent Unicode-aware Nepali character comparison."""
     if not isinstance(s, str) or not s:
@@ -25,10 +24,9 @@ st.set_page_config(
     initial_sidebar_state="auto"
 )
 
-# --- COOKIE MANAGER SETUP (FIXED) ---
-# We instantiate this directly without caching to avoid the TypeError
+# --- COOKIE MANAGER SETUP ---
 cookie_manager = stx.CookieManager()
-# ------------------------------------
+# ----------------------------
 
 # Function to convert image to base64
 def get_base64_image(image_path):
@@ -71,9 +69,7 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # --- LOGIN LOGIC WITH COOKIES ---
-
-# 1. Check if user is already logged in via Cookie
-time.sleep(0.1) # Small delay to ensure cookies load
+time.sleep(0.1) 
 cookies = cookie_manager.get_all()
 if 'voter_auth' in cookies and cookies['voter_auth'] == 'true':
     st.session_state.logged_in = True
@@ -116,15 +112,11 @@ def login_page():
             if not USERNAME and not PASSWORD:
                 st.error("Setup credentials in .env")
             elif check_login(username, password):
-                # LOGIN SUCCESS: Set Session AND Cookie
                 st.session_state.logged_in = True
-                
-                # Set cookie to expire in 7 days
                 cookie_manager.set('voter_auth', 'true', expires_at=None, key="set_auth")
-                
                 st.success("लगइन सफल भयो! (Login Success)")
                 st.balloons()
-                time.sleep(1) # Give time for cookie to set
+                time.sleep(1)
                 st.rerun()
             else:
                 st.error("गलत प्रयोगकर्ता नाम वा पासवर्ड।")
@@ -132,7 +124,6 @@ def login_page():
     st.markdown('<div class="login-footer">Official use only • Authorized personnel</div>', unsafe_allow_html=True)
 
 def logout():
-    # LOGOUT: Clear Session AND Cookie
     st.session_state.logged_in = False
     cookie_manager.delete('voter_auth', key="del_auth")
     time.sleep(0.5)
@@ -335,8 +326,26 @@ def main_app():
                 else:
                     st.warning("कुनै पनि मतदाता भेटिएन")
 
+        # --- UPDATED STATISTICS SECTION WITH GEN Z ---
         st.sidebar.markdown("---")
+        st.sidebar.subheader("तथ्याङ्क")
         st.sidebar.metric("कुल मतदाता", f"{len(df):,}")
+        
+        # New Gen Z Calculation (18-29 years old)
+        if 'उमेर(वर्ष)' in df.columns:
+            genz_voters = df[(df['उमेर(वर्ष)'] >= 18) & (df['उमेर(वर्ष)'] <= 29)]
+            st.sidebar.metric("Gen Z (18-29 वर्ष)", f"{len(genz_voters):,}")
+        
+        if 'लिङ्ग' in df.columns:
+            st.sidebar.write("लिङ्ग अनुसार:")
+            gender_counts = df['लिङ्ग'].value_counts()
+            for gender, count in gender_counts.items():
+                st.sidebar.write(f"- {gender}: {count:,}")
+        
+        if 'उमेर(वर्ष)' in df.columns:
+            avg_age = df['उमेर(वर्ष)'].dropna().mean()
+            st.sidebar.metric("औसत उमेर", f"{avg_age:.1f} वर्ष" if not pd.isna(avg_age) else "—")
+        # ---------------------------------------------
 
     except FileNotFoundError:
         st.error("voterlist.xlsx not found.")
