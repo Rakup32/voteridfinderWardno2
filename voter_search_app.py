@@ -67,6 +67,12 @@ st.markdown("""
     @media screen and (max-width: 480px) { .main { padding: 0.4rem 0.5rem; } h1 { font-size: 1.2rem !important; } }
     </style>
     """, unsafe_allow_html=True)
+# Inside your results loop or detail view:
+from print_logic import generate_voter_card
+
+# If user selects a specific voter
+if st.button("विवरण हेर्नुहोस् / View Details"):
+    generate_voter_card(selected_row)
 
 # --- LOGIN LOGIC WITH COOKIES ---
 time.sleep(0.1) 
