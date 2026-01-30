@@ -276,6 +276,27 @@ def unicode_prefix_search(df, column, search_term):
     mask = df[lower_col].str.startswith(normalized, na=False)
     return df[mask]
 
+# NEW HELPER FUNCTION: Dynamically adjust table height
+def show_results_table(data, columns):
+    """
+    Dynamically adjust table height to show more rows.
+    Max height is capped at 800px (approx 25 rows) to prevent the page from getting too long.
+    """
+    if data.empty:
+        return
+        
+    # Calculate height: 35px per row + 38px for the header
+    # We limit it between 150px (min) and 800px (max)
+    calculated_height = (len(data) + 1) * 35 
+    display_height = max(150, min(calculated_height, 800))
+    
+    st.dataframe(
+        data[columns], 
+        use_container_width=True, 
+        height=display_height,
+        hide_index=True  # Removes the 0,1,2 numbers on the left
+    )
+
 # Main app (only shown after login)
 def main_app():
     # Render title and UI first so the page is never blank
@@ -317,7 +338,8 @@ def main_app():
         # Display based on search option
         if search_option == "सबै डाटा हेर्नुहोस्":
             st.subheader("सम्पूर्ण मतदाता सूची")
-            st.dataframe(df[display_columns], use_container_width=True, height=600)
+            # UPDATED: Use helper function
+            show_results_table(df, display_columns)
             st.info(f"कुल मतदाता संख्या: {len(df):,}")
         
         elif search_option == "मतदाताको नामबाट खोज्नुहोस्":
@@ -349,7 +371,8 @@ def main_app():
                 
                 if not filtered_df.empty:
                     st.success(f"✅ {len(filtered_df):,} मतदाता भेटियो (खोज: '{search_name}')")
-                    st.dataframe(filtered_df[display_columns], use_container_width=True, height=400)
+                    # UPDATED: Use helper function
+                    show_results_table(filtered_df, display_columns)
                 else:
                     st.warning(f"कुनै पनि मतदाता भेटिएन (खोज: '{search_name}')")
                     st.info("💡 सुझाव: सुरुको अक्षर टाइप गर्नुहोस् जस्तै 'र' वा 'रा'")
@@ -368,7 +391,8 @@ def main_app():
                     
                     if not filtered_df.empty:
                         st.success("✅ मतदाता भेटियो")
-                        st.dataframe(filtered_df[display_columns], use_container_width=True, height=200)
+                        # UPDATED: Use helper function
+                        show_results_table(filtered_df, display_columns)
                     else:
                         st.warning("कुनै पनि मतदाता भेटिएन")
                 except ValueError:
@@ -396,7 +420,8 @@ def main_app():
                 
                 if not filtered_df.empty:
                     st.success(f"✅ {len(filtered_df):,} मतदाता भेटियो (खोज: '{search_parent}')")
-                    st.dataframe(filtered_df[display_columns], use_container_width=True, height=400)
+                    # UPDATED: Use helper function
+                    show_results_table(filtered_df, display_columns)
                 else:
                     st.warning(f"कुनै पनि मतदाता भेटिएन (खोज: '{search_parent}')")
             else:
@@ -424,7 +449,8 @@ def main_app():
                 
                 if not filtered_df.empty:
                     st.success(f"✅ {len(filtered_df):,} मतदाता भेटियो (खोज: '{search_spouse}')")
-                    st.dataframe(filtered_df[display_columns], use_container_width=True, height=400)
+                    # UPDATED: Use helper function
+                    show_results_table(filtered_df, display_columns)
                 else:
                     st.warning(f"कुनै पनि मतदाता भेटिएन (खोज: '{search_spouse}')")
             else:
@@ -454,7 +480,8 @@ def main_app():
             if len(filtered_df) == 0 and selected_gender != "सबै":
                 st.info(f"📊 यो डाटामा '{selected_gender}' लिङ्गका मतदाता छैनन्")
             
-            st.dataframe(filtered_df[display_columns], use_container_width=True, height=500)
+            # UPDATED: Use helper function
+            show_results_table(filtered_df, display_columns)
         
         elif search_option == "उमेर दायराबाट खोज्नुहोस्":
             st.subheader("उमेर दायराबाट खोज्नुहोस्")
@@ -472,7 +499,8 @@ def main_app():
                 in_range = (df['उमेर(वर्ष)'] >= min_age) & (df['उमेर(वर्ष)'] <= max_age)
                 filtered_df = df[age_ok & in_range]
             st.success(f"✅ {len(filtered_df):,} मतदाता भेटियो (उमेर: {min_age} - {max_age} वर्ष)")
-            st.dataframe(filtered_df[display_columns], use_container_width=True, height=500)
+            # UPDATED: Use helper function
+            show_results_table(filtered_df, display_columns)
         
         elif search_option == "उन्नत खोज (सबै फिल्टर)":
             st.subheader("🔍 उन्नत खोज - धेरै फिल्टर प्रयोग गर्नुहोस्")
@@ -565,7 +593,8 @@ def main_app():
                         if min_age_filter > 0 or max_age_filter < 150:
                             st.write(f"- उमेर: {min_age_filter} - {max_age_filter} वर्ष")
                     
-                    st.dataframe(filtered_df[display_columns], use_container_width=True, height=500)
+                    # UPDATED: Use helper function
+                    show_results_table(filtered_df, display_columns)
                 else:
                     st.warning("⚠️ कुनै पनि मतदाता भेटिएन। कृपया फिल्टर परिवर्तन गर्नुहोस्।")
                     st.info("💡 सुझाव: सुरुको अक्षर टाइप गर्नुहोस्")
