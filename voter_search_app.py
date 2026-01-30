@@ -595,7 +595,7 @@ def main_app():
     
     # Footer
     st.markdown("---")
-    st.markdown("**नोट:** यो एक मतदाता सूची खोज प्रणाली हो। सबै डाटा मूल Excel फाइलबाट लिइएको छ।")
+    st.markdown("**नोट:** यो एक मतदाता सूची खोज प्रणाली हो। सबै डाटा मूल Database फाइलबाट लिइएको छ।")
 
 # Check if user is logged in
 if not st.session_state.logged_in:
