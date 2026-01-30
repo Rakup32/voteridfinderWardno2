@@ -95,7 +95,7 @@ def login_page():
         <span class="login-badge">Secure access</span>
         <div class="login-title">सुरक्षित प्रवेश</div>
         <div class="login-subtitle">मतदाता सूची खोज प्रणाली</div>
-        <div class="login-subtitle-en">Bharatpur Ward No-02 Voter List Search System</div>
+        <div class="login-subtitle-en">Voter List Search System</div>
     </div>
     <div class="login-divider"></div>
     </div>
@@ -131,7 +131,8 @@ def logout():
 
 # --------------------------------
 
-EXPECTED_DISPLAY_COLUMNS = [
+# We keep standard columns to preserve order, but we will add new ones dynamically
+STANDARD_COLUMNS = [
     'सि.नं.', 'मतदाता नं', 'मतदाताको नाम', 'उमेर(वर्ष)', 'लिङ्ग',
     'पति/पत्नीको नाम', 'पिता/माताको नाम'
 ]
@@ -147,26 +148,47 @@ def load_data():
     if 'उमेर(वर्ष)' in df.columns:
         df['उमेर(वर्ष)'] = pd.to_numeric(df['उमेर(वर्ष)'], errors='coerce')
 
-    df['मतदाताको नाम_lower'] = df['मतदाताको नाम'].astype(str).map(lambda s: _normalize_unicode(s))
-    df['पिता/माताको नाम_lower'] = df['पिता/माताको नाम'].astype(str).map(lambda s: _normalize_unicode(s))
-    df['पति/पत्नीको नाम_lower'] = df['पति/पत्नीको नाम'].astype(str).map(lambda s: _normalize_unicode(s))
-
-    df['पति/पत्नीको नाम'] = df['पति/पत्नीको नाम'].fillna('-')
-    df['पति/पत्नीको नाम_lower'] = df['पति/पत्नीको नाम_lower'].fillna('-')
+    # Create helper columns for search (ending in _lower)
+    # These will be hidden from the final view automatically
+    if 'मतदाताको नाम' in df.columns:
+        df['मतदाताको नाम_lower'] = df['मतदाताको नाम'].astype(str).map(lambda s: _normalize_unicode(s))
+    if 'पिता/माताको नाम' in df.columns:
+        df['पिता/माताको नाम_lower'] = df['पिता/माताको नाम'].astype(str).map(lambda s: _normalize_unicode(s))
+    if 'पति/पत्नीको नाम' in df.columns:
+        df['पति/पत्नीको नाम_lower'] = df['पति/पत्नीको नाम'].astype(str).map(lambda s: _normalize_unicode(s))
+        df['पति/पत्नीको नाम'] = df['पति/पत्नीको नाम'].fillna('-')
+        df['पति/पत्नीको नाम_lower'] = df['पति/पत्नीको नाम_lower'].fillna('-')
 
     return df
 
 def get_display_columns(df):
-    valid = [c for c in EXPECTED_DISPLAY_COLUMNS if c in df.columns]
-    return valid
+    """
+    Returns ALL columns from the Excel file, excluding internal helper columns.
+    Preserves the order of STANDARD_COLUMNS first, then appends any new columns found.
+    """
+    # 1. Start with standard columns if they exist in the file
+    final_cols = [c for c in STANDARD_COLUMNS if c in df.columns]
+    
+    # 2. Add any NEW columns that are in the file but not in standard list
+    #    And explicitly exclude our internal '_lower' helper columns
+    for c in df.columns:
+        if c not in final_cols and not c.endswith('_lower'):
+            final_cols.append(c)
+            
+    return final_cols
 
 def unicode_prefix_search(df, column, search_term):
-    if not search_term:
+    if not search_term or column not in df.columns:
         return df
     normalized = _normalize_unicode(search_term)
     if not normalized:
         return df
+    
+    # Check if helper column exists
     lower_col = column + "_lower"
+    if lower_col not in df.columns:
+        return df
+        
     mask = df[lower_col].str.startswith(normalized, na=False)
     return df[mask]
 
@@ -180,7 +202,7 @@ def show_results_table(data, columns):
 
 def main_app():
     st.title("🗳️ मतदाता सूची खोज प्रणाली")
-    st.markdown("**Bharatpur Ward No-02 Voter List Search System**")
+    st.markdown("**Voter List Search System**")
     
     with st.sidebar:
         if st.button("🚪 Logout / बाहिर निस्कनुहोस्", use_container_width=True):
@@ -192,7 +214,9 @@ def main_app():
         with st.spinner('डाटा लोड गर्दै... / Loading data...'):
             df = load_data()
 
+        # Get all valid display columns (Standard + Any New Columns)
         display_columns = get_display_columns(df)
+        
         if not display_columns:
             st.error("Excel columns missing.")
             return
@@ -326,12 +350,11 @@ def main_app():
                 else:
                     st.warning("कुनै पनि मतदाता भेटिएन")
 
-        # --- UPDATED STATISTICS SECTION WITH GEN Z ---
+        # --- STATISTICS SECTION ---
         st.sidebar.markdown("---")
         st.sidebar.subheader("तथ्याङ्क")
         st.sidebar.metric("कुल मतदाता", f"{len(df):,}")
         
-        # New Gen Z Calculation (18-29 years old)
         if 'उमेर(वर्ष)' in df.columns:
             genz_voters = df[(df['उमेर(वर्ष)'] >= 18) & (df['उमेर(वर्ष)'] <= 29)]
             st.sidebar.metric("Gen Z (18-29 वर्ष)", f"{len(genz_voters):,}")
