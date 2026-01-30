@@ -193,11 +193,41 @@ def logout():
     st.session_state.logged_in = False
     st.rerun()
 
-# Load data
+# Optimized data loading with preprocessing
 @st.cache_data
 def load_data():
     df = pd.read_excel('voterlist.xlsx')
+    
+    # Optimize data types for faster operations
+    # Convert object columns to category for memory efficiency
+    for col in df.select_dtypes(include=['object']).columns:
+        # Only convert if not used for text search
+        if col == 'लिङ्ग':
+            df[col] = df[col].astype('category')
+    
+    # Create lowercase versions for faster case-insensitive search
+    df['मतदाताको नाम_lower'] = df['मतदाताको नाम'].str.lower()
+    df['पिता/माताको नाम_lower'] = df['पिता/माताको नाम'].str.lower()
+    df['पति/पत्नीको नाम_lower'] = df['पति/पत्नीको नाम'].str.lower()
+    
+    # Fill NaN values for faster filtering
+    df['पति/पत्नीको नाम'] = df['पति/पत्नीको नाम'].fillna('-')
+    df['पति/पत्नीको नाम_lower'] = df['पति/पत्नीको नाम_lower'].fillna('-')
+    
     return df
+
+# Fast search function with optimizations
+def fast_search(df, column, search_term):
+    """Optimized search function using lowercase comparison"""
+    if not search_term:
+        return df
+    
+    search_lower = search_term.lower()
+    lower_col = column + '_lower'
+    
+    # Use vectorized string operations for speed
+    mask = df[lower_col].str.contains(search_lower, na=False, regex=False)
+    return df[mask]
 
 # Main app (only shown after login)
 def main_app():
@@ -213,7 +243,12 @@ def main_app():
     st.markdown("---")
     
     try:
-        df = load_data()
+        # Load data with spinner
+        with st.spinner('डाटा लोड गर्दै... / Loading data...'):
+            df = load_data()
+        
+        # Display columns to show (exclude lowercase helper columns)
+        display_columns = ['सि.नं.', 'मतदाता नं', 'मतदाताको नाम', 'उमेर(वर्ष)', 'लिङ्ग', 'पति/पत्नीको नाम', 'पिता/माताको नाम']
         
         # Sidebar for search options
         st.sidebar.header("खोज विकल्प")
@@ -232,19 +267,20 @@ def main_app():
         # Display based on search option
         if search_option == "सबै डाटा हेर्नुहोस्":
             st.subheader("सम्पूर्ण मतदाता सूची")
-            st.dataframe(df, use_container_width=True, height=600)
-            st.info(f"कुल मतदाता संख्या: {len(df)}")
+            st.dataframe(df[display_columns], use_container_width=True, height=600)
+            st.info(f"कुल मतदाता संख्या: {len(df):,}")
         
         elif search_option == "मतदाताको नामबाट खोज्नुहोस्":
             st.subheader("मतदाताको नामबाट खोज्नुहोस्")
             search_name = st.text_input("मतदाताको नाम लेख्नुहोस्:", "", key="name_search")
             
             if search_name:
-                filtered_df = df[df['मतदाताको नाम'].str.contains(search_name, case=False, na=False)]
+                with st.spinner('खोज्दै... / Searching...'):
+                    filtered_df = fast_search(df, 'मतदाताको नाम', search_name)
                 
                 if not filtered_df.empty:
-                    st.success(f"{len(filtered_df)} मतदाता भेटियो")
-                    st.dataframe(filtered_df, use_container_width=True, height=400)
+                    st.success(f"{len(filtered_df):,} मतदाता भेटियो")
+                    st.dataframe(filtered_df[display_columns], use_container_width=True, height=400)
                 else:
                     st.warning("कुनै पनि मतदाता भेटिएन")
             else:
@@ -257,11 +293,13 @@ def main_app():
             if search_number:
                 try:
                     search_num = int(search_number)
-                    filtered_df = df[df['मतदाता नं'] == search_num]
+                    with st.spinner('खोज्दै... / Searching...'):
+                        # Use vectorized comparison for speed
+                        filtered_df = df[df['मतदाता नं'] == search_num]
                     
                     if not filtered_df.empty:
                         st.success("मतदाता भेटियो")
-                        st.dataframe(filtered_df, use_container_width=True, height=200)
+                        st.dataframe(filtered_df[display_columns], use_container_width=True, height=200)
                     else:
                         st.warning("कुनै पनि मतदाता भेटिएन")
                 except ValueError:
@@ -274,11 +312,12 @@ def main_app():
             search_parent = st.text_input("पिता वा माताको नाम लेख्नुहोस्:", "", key="parent_search")
             
             if search_parent:
-                filtered_df = df[df['पिता/माताको नाम'].str.contains(search_parent, case=False, na=False)]
+                with st.spinner('खोज्दै... / Searching...'):
+                    filtered_df = fast_search(df, 'पिता/माताको नाम', search_parent)
                 
                 if not filtered_df.empty:
-                    st.success(f"{len(filtered_df)} मतदाता भेटियो")
-                    st.dataframe(filtered_df, use_container_width=True, height=400)
+                    st.success(f"{len(filtered_df):,} मतदाता भेटियो")
+                    st.dataframe(filtered_df[display_columns], use_container_width=True, height=400)
                 else:
                     st.warning("कुनै पनि मतदाता भेटिएन")
             else:
@@ -289,16 +328,15 @@ def main_app():
             search_spouse = st.text_input("पति वा पत्नीको नाम लेख्नुहोस्:", "", key="spouse_search")
             
             if search_spouse:
-                # Filter out NaN and '-' values
-                filtered_df = df[
-                    (df['पति/पत्नीको नाम'].notna()) & 
-                    (df['पति/पत्नीको नाम'] != '-') &
-                    (df['पति/पत्नीको नाम'].str.contains(search_spouse, case=False, na=False))
-                ]
+                with st.spinner('खोज्दै... / Searching...'):
+                    # Filter out NaN and '-' values efficiently
+                    search_lower = search_spouse.lower()
+                    mask = (df['पति/पत्नीको नाम'] != '-') & df['पति/पत्नीको नाम_lower'].str.contains(search_lower, na=False, regex=False)
+                    filtered_df = df[mask]
                 
                 if not filtered_df.empty:
-                    st.success(f"{len(filtered_df)} मतदाता भेटियो")
-                    st.dataframe(filtered_df, use_container_width=True, height=400)
+                    st.success(f"{len(filtered_df):,} मतदाता भेटियो")
+                    st.dataframe(filtered_df[display_columns], use_container_width=True, height=400)
                 else:
                     st.warning("कुनै पनि मतदाता भेटिएन")
             else:
@@ -307,16 +345,17 @@ def main_app():
         elif search_option == "लिङ्गबाट फिल्टर गर्नुहोस्":
             st.subheader("लिङ्गबाट फिल्टर गर्नुहोस्")
             
-            unique_genders = df['लिङ्ग'].unique().tolist()
+            unique_genders = df['लिङ्ग'].cat.categories.tolist()
             selected_gender = st.selectbox("लिङ्ग छान्नुहोस्:", ["सबै"] + unique_genders)
             
             if selected_gender == "सबै":
                 filtered_df = df
             else:
-                filtered_df = df[df['लिङ्ग'] == selected_gender]
+                with st.spinner('फिल्टर गर्दै... / Filtering...'):
+                    filtered_df = df[df['लिङ्ग'] == selected_gender]
             
-            st.success(f"{len(filtered_df)} मतदाता भेटियो")
-            st.dataframe(filtered_df, use_container_width=True, height=500)
+            st.success(f"{len(filtered_df):,} मतदाता भेटियो")
+            st.dataframe(filtered_df[display_columns], use_container_width=True, height=500)
         
         elif search_option == "उमेर दायराबाट खोज्नुहोस्":
             st.subheader("उमेर दायराबाट खोज्नुहोस्")
@@ -329,10 +368,12 @@ def main_app():
             with col2:
                 max_age = st.number_input("अधिकतम उमेर:", min_value=0, max_value=150, value=100)
             
-            filtered_df = df[(df['उमेर(वर्ष)'] >= min_age) & (df['उमेर(वर्ष)'] <= max_age)]
+            with st.spinner('खोज्दै... / Searching...'):
+                # Use vectorized comparison for speed
+                filtered_df = df[(df['उमेर(वर्ष)'] >= min_age) & (df['उमेर(वर्ष)'] <= max_age)]
             
-            st.success(f"{len(filtered_df)} मतदाता भेटियो (उमेर: {min_age} - {max_age} वर्ष)")
-            st.dataframe(filtered_df, use_container_width=True, height=500)
+            st.success(f"{len(filtered_df):,} मतदाता भेटियो (उमेर: {min_age} - {max_age} वर्ष)")
+            st.dataframe(filtered_df[display_columns], use_container_width=True, height=500)
         
         elif search_option == "उन्नत खोज (सबै फिल्टर)":
             st.subheader("🔍 उन्नत खोज - धेरै फिल्टर प्रयोग गर्नुहोस्")
@@ -353,7 +394,7 @@ def main_app():
             
             with col2:
                 # Gender filter
-                unique_genders = df['लिङ्ग'].unique().tolist()
+                unique_genders = df['लिङ्ग'].cat.categories.tolist()
                 gender_filter = st.selectbox("लिङ्ग:", ["सबै"] + unique_genders, key="adv_gender")
                 
                 # Age range
@@ -365,35 +406,38 @@ def main_app():
             
             # Apply filters button
             if st.button("🔍 खोज्नुहोस्", type="primary"):
-                filtered_df = df.copy()
-                
-                # Apply name filter
-                if name_filter:
-                    filtered_df = filtered_df[filtered_df['मतदाताको नाम'].str.contains(name_filter, case=False, na=False)]
-                
-                # Apply parent filter
-                if parent_filter:
-                    filtered_df = filtered_df[filtered_df['पिता/माताको नाम'].str.contains(parent_filter, case=False, na=False)]
-                
-                # Apply spouse filter
-                if spouse_filter:
-                    filtered_df = filtered_df[
-                        (filtered_df['पति/पत्नीको नाम'].notna()) & 
-                        (filtered_df['पति/पत्नीको नाम'] != '-') &
-                        (filtered_df['पति/पत्नीको नाम'].str.contains(spouse_filter, case=False, na=False))
-                    ]
-                
-                # Apply gender filter
-                if gender_filter != "सबै":
-                    filtered_df = filtered_df[filtered_df['लिङ्ग'] == gender_filter]
-                
-                # Apply age filter
-                filtered_df = filtered_df[(filtered_df['उमेर(वर्ष)'] >= min_age_filter) & (filtered_df['उमेर(वर्ष)'] <= max_age_filter)]
+                with st.spinner('खोज्दै... / Searching...'):
+                    # Start with full dataset
+                    mask = pd.Series([True] * len(df), index=df.index)
+                    
+                    # Apply name filter
+                    if name_filter:
+                        name_lower = name_filter.lower()
+                        mask &= df['मतदाताको नाम_lower'].str.contains(name_lower, na=False, regex=False)
+                    
+                    # Apply parent filter
+                    if parent_filter:
+                        parent_lower = parent_filter.lower()
+                        mask &= df['पिता/माताको नाम_lower'].str.contains(parent_lower, na=False, regex=False)
+                    
+                    # Apply spouse filter
+                    if spouse_filter:
+                        spouse_lower = spouse_filter.lower()
+                        mask &= (df['पति/पत्नीको नाम'] != '-') & df['पति/पत्नीको नाम_lower'].str.contains(spouse_lower, na=False, regex=False)
+                    
+                    # Apply gender filter
+                    if gender_filter != "सबै":
+                        mask &= (df['लिङ्ग'] == gender_filter)
+                    
+                    # Apply age filter
+                    mask &= (df['उमेर(वर्ष)'] >= min_age_filter) & (df['उमेर(वर्ष)'] <= max_age_filter)
+                    
+                    filtered_df = df[mask]
                 
                 # Display results
                 st.markdown("---")
                 if not filtered_df.empty:
-                    st.success(f"✅ {len(filtered_df)} मतदाता भेटियो")
+                    st.success(f"✅ {len(filtered_df):,} मतदाता भेटियो")
                     
                     # Show applied filters
                     with st.expander("लागू गरिएका फिल्टरहरू"):
@@ -408,7 +452,7 @@ def main_app():
                         if min_age_filter > 0 or max_age_filter < 150:
                             st.write(f"- उमेर: {min_age_filter} - {max_age_filter} वर्ष")
                     
-                    st.dataframe(filtered_df, use_container_width=True, height=500)
+                    st.dataframe(filtered_df[display_columns], use_container_width=True, height=500)
                 else:
                     st.warning("⚠️ कुनै पनि मतदाता भेटिएन। कृपया फिल्टर परिवर्तन गर्नुहोस्।")
             else:
@@ -417,13 +461,13 @@ def main_app():
         # Statistics in sidebar
         st.sidebar.markdown("---")
         st.sidebar.subheader("तथ्याङ्क")
-        st.sidebar.metric("कुल मतदाता", len(df))
+        st.sidebar.metric("कुल मतदाता", f"{len(df):,}")
         
         if 'लिङ्ग' in df.columns:
             st.sidebar.write("लिङ्ग अनुसार:")
             gender_counts = df['लिङ्ग'].value_counts()
             for gender, count in gender_counts.items():
-                st.sidebar.write(f"- {gender}: {count}")
+                st.sidebar.write(f"- {gender}: {count:,}")
         
         if 'उमेर(वर्ष)' in df.columns:
             st.sidebar.metric("औसत उमेर", f"{df['उमेर(वर्ष)'].mean():.1f} वर्ष")
