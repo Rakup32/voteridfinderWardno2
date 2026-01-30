@@ -6,23 +6,15 @@ try:
     from dotenv import load_dotenv
     load_dotenv()
 except ImportError:
-    pass  # python-dotenv not installed, skipping
+    pass
 
 def get_credential(key):
-    """
-    Retrieves a credential with the following priority:
-    1. System Environment Variable / .env file (Local/Docker)
-    2. Streamlit Secrets (Streamlit Cloud)
-    3. Returns empty string if not found
-    """
-    # Check Environment Variable first
+    # Check Environment Variable first (Local)
     value = os.getenv(key)
     if value:
         return value.strip()
     
-    # Check Streamlit Secrets second
-    # We use a try-except block because accessing st.secrets locally 
-    # without a secrets.toml file might raise a FileNotFoundError.
+    # Check Streamlit Secrets second (Cloud)
     try:
         if key in st.secrets:
             return st.secrets[key]
@@ -31,6 +23,5 @@ def get_credential(key):
         
     return ""
 
-# Fetch the credentials
 USERNAME = get_credential("VOTER_APP_USERNAME")
 PASSWORD = get_credential("VOTER_APP_PASSWORD")
