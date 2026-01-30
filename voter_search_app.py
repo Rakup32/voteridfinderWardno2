@@ -6,6 +6,8 @@ import base64
 import time
 import extra_streamlit_components as stx
 from credentials import USERNAME, PASSWORD
+# NEW IMPORT
+import print_logic
 
 def _normalize_unicode(s):
     """Normalize to NFC for consistent Unicode-aware Nepali character comparison."""
@@ -131,7 +133,6 @@ def logout():
 
 # --------------------------------
 
-# We keep standard columns to preserve order, but we will add new ones dynamically
 STANDARD_COLUMNS = [
     'सि.नं.', 'मतदाता नं', 'मतदाताको नाम', 'उमेर(वर्ष)', 'लिङ्ग',
     'पति/पत्नीको नाम', 'पिता/माताको नाम'
@@ -148,8 +149,6 @@ def load_data():
     if 'उमेर(वर्ष)' in df.columns:
         df['उमेर(वर्ष)'] = pd.to_numeric(df['उमेर(वर्ष)'], errors='coerce')
 
-    # Create helper columns for search (ending in _lower)
-    # These will be hidden from the final view automatically
     if 'मतदाताको नाम' in df.columns:
         df['मतदाताको नाम_lower'] = df['मतदाताको नाम'].astype(str).map(lambda s: _normalize_unicode(s))
     if 'पिता/माताको नाम' in df.columns:
@@ -162,19 +161,10 @@ def load_data():
     return df
 
 def get_display_columns(df):
-    """
-    Returns ALL columns from the Excel file, excluding internal helper columns.
-    Preserves the order of STANDARD_COLUMNS first, then appends any new columns found.
-    """
-    # 1. Start with standard columns if they exist in the file
     final_cols = [c for c in STANDARD_COLUMNS if c in df.columns]
-    
-    # 2. Add any NEW columns that are in the file but not in standard list
-    #    And explicitly exclude our internal '_lower' helper columns
     for c in df.columns:
         if c not in final_cols and not c.endswith('_lower'):
             final_cols.append(c)
-            
     return final_cols
 
 def unicode_prefix_search(df, column, search_term):
@@ -183,22 +173,43 @@ def unicode_prefix_search(df, column, search_term):
     normalized = _normalize_unicode(search_term)
     if not normalized:
         return df
-    
-    # Check if helper column exists
     lower_col = column + "_lower"
     if lower_col not in df.columns:
         return df
-        
     mask = df[lower_col].str.startswith(normalized, na=False)
     return df[mask]
 
+# --- UPDATED TABLE FUNCTION (WITH SELECTION LOGIC) ---
 def show_results_table(data, columns):
-    """Dynamically adjust table height."""
+    """
+    Displays table. Handles Selection to show Popup.
+    """
     if data.empty:
         return
+        
     calculated_height = (len(data) + 1) * 35 
     display_height = max(150, min(calculated_height, 800))
-    st.dataframe(data[columns], use_container_width=True, height=display_height, hide_index=True)
+    
+    st.info("👆 विवरण हेर्न र प्रिन्ट गर्न तालिकाको कुनै एक पङ्क्तिमा क्लिक गर्नुहोस् (Click a row to Print details)")
+
+    # Enable selection mode
+    event = st.dataframe(
+        data[columns], 
+        use_container_width=True, 
+        height=display_height,
+        hide_index=True,
+        on_select="rerun",  # Triggers app rerun when clicked
+        selection_mode="single-row"
+    )
+
+    # If user selected a row
+    if event.selection.rows:
+        selected_index = event.selection.rows[0]
+        selected_row = data.iloc[selected_index]
+        
+        # Call the popup function from the NEW file
+        print_logic.show_voter_popup(selected_row)
+# -----------------------------------------------------
 
 def main_app():
     st.title("🗳️ मतदाता सूची खोज प्रणाली")
@@ -214,7 +225,6 @@ def main_app():
         with st.spinner('डाटा लोड गर्दै... / Loading data...'):
             df = load_data()
 
-        # Get all valid display columns (Standard + Any New Columns)
         display_columns = get_display_columns(df)
         
         if not display_columns:
@@ -231,6 +241,8 @@ def main_app():
             index=default_index
         )
         
+        # Pass filtered_df to show_results_table in all sections below
+        
         if search_option == "सबै डाटा हेर्नुहोस्":
             st.subheader("सम्पूर्ण मतदाता सूची")
             show_results_table(df, display_columns)
@@ -239,9 +251,6 @@ def main_app():
         elif search_option == "मतदाताको नामबाट खोज्नुहोस्":
             st.subheader("मतदाताको नामबाट खोज्नुहोस्")
             st.caption("🔤 उपसर्ग खोज / Prefix search")
-            with st.expander("📘 उदाहरण / Examples"):
-                st.markdown("**Example:** 'र' finds 'राम', 'रमेश'")
-            
             search_name = st.text_input("मतदाताको नाम लेख्नुहोस्:", "", key="name_search")
             if search_name:
                 filtered_df = unicode_prefix_search(df, 'मतदाताको नाम', search_name)
@@ -293,7 +302,6 @@ def main_app():
             unique_genders = [g for g in df['लिङ्ग'].unique().tolist() if pd.notna(g)]
             gender_options = ["सबै"] + list(set(unique_genders + ["पुरुष", "महिला"]))
             selected_gender = st.selectbox("लिङ्ग छान्नुहोस्:", gender_options)
-            
             if selected_gender == "सबै":
                 filtered_df = df
             else:
@@ -306,7 +314,6 @@ def main_app():
             c1, c2 = st.columns(2)
             min_age = c1.number_input("न्यूनतम:", value=18)
             max_age = c2.number_input("अधिकतम:", value=100)
-            
             age_ok = df['उमेर(वर्ष)'].notna()
             in_range = (df['उमेर(वर्ष)'] >= min_age) & (df['उमेर(वर्ष)'] <= max_age)
             filtered_df = df[age_ok & in_range]
@@ -337,7 +344,6 @@ def main_app():
                     mask &= (df['पति/पत्नीको नाम'] != '-') & df['पति/पत्नीको नाम_lower'].str.startswith(_normalize_unicode(spouse_filter), na=False)
                 if gender_filter != "सबै":
                     mask &= (df['लिङ्ग'] == gender_filter)
-                
                 age_ok = df['उमेर(वर्ष)'].notna()
                 age_in_range = (df['उमेर(वर्ष)'] >= min_age_filter) & (df['उमेर(वर्ष)'] <= max_age_filter)
                 mask &= age_ok & age_in_range
@@ -350,25 +356,20 @@ def main_app():
                 else:
                     st.warning("कुनै पनि मतदाता भेटिएन")
 
-        # --- STATISTICS SECTION ---
         st.sidebar.markdown("---")
         st.sidebar.subheader("तथ्याङ्क")
         st.sidebar.metric("कुल मतदाता", f"{len(df):,}")
-        
         if 'उमेर(वर्ष)' in df.columns:
             genz_voters = df[(df['उमेर(वर्ष)'] >= 18) & (df['उमेर(वर्ष)'] <= 29)]
             st.sidebar.metric("Gen Z (18-29 वर्ष)", f"{len(genz_voters):,}")
-        
         if 'लिङ्ग' in df.columns:
             st.sidebar.write("लिङ्ग अनुसार:")
             gender_counts = df['लिङ्ग'].value_counts()
             for gender, count in gender_counts.items():
                 st.sidebar.write(f"- {gender}: {count:,}")
-        
         if 'उमेर(वर्ष)' in df.columns:
             avg_age = df['उमेर(वर्ष)'].dropna().mean()
             st.sidebar.metric("औसत उमेर", f"{avg_age:.1f} वर्ष" if not pd.isna(avg_age) else "—")
-        # ---------------------------------------------
 
     except FileNotFoundError:
         st.error("voterlist.xlsx not found.")
