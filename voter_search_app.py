@@ -195,12 +195,6 @@ def unicode_prefix_search(df, column, search_term):
     return df[mask]
 
 def show_results_table_with_print(data, columns):
-<<<<<<< HEAD
-    """Display results table with print buttons for each row - IMPROVED VERSION."""
-    if data.empty:
-        return
-    
-=======
     """Display results table with print buttons for each row - IMPROVED VERSION with proper state management."""
     if data.empty:
         return
@@ -209,7 +203,6 @@ def show_results_table_with_print(data, columns):
     if 'print_preview_states' not in st.session_state:
         st.session_state.print_preview_states = {}
     
->>>>>>> 533313b (v1)
     # Info box explaining the print feature
     st.markdown("""
     <div class="print-info-box">
@@ -226,12 +219,9 @@ def show_results_table_with_print(data, columns):
         voter_name = row.get('मतदाताको नाम', 'N/A')
         voter_num = row.get('मतदाता नं', 'N/A')
         
-<<<<<<< HEAD
-=======
         # Create a unique key for this voter based on voter number for better stability
         voter_key = f"voter_{voter_num}"
         
->>>>>>> 533313b (v1)
         with st.expander(f"🗳️ {voter_name} — मतदाता नं: {voter_num}", expanded=False):
             col1, col2 = st.columns([3, 1])
             
@@ -246,16 +236,6 @@ def show_results_table_with_print(data, columns):
             
             with col2:
                 # Print button with unique key
-<<<<<<< HEAD
-                if st.button("🖨️ मुद्रण गर्नुहोस्\n(Print)", key=f"print_btn_{idx}", use_container_width=True):
-                    # Set session state to show preview
-                    st.session_state[f'show_print_{idx}'] = True
-            
-            # Show print preview if button was clicked
-            if st.session_state.get(f'show_print_{idx}', False):
-                st.markdown("---")
-                st.info("📄 **रसिद पूर्वावलोकन / Receipt Preview** — 58mm थर्मल प्रिन्टर")
-=======
                 if st.button("🖨️ मुद्रण गर्नुहोस्\n(Print)", key=f"print_btn_{voter_key}", use_container_width=True):
                     # Toggle the print preview state
                     st.session_state.print_preview_states[voter_key] = True
@@ -265,7 +245,6 @@ def show_results_table_with_print(data, columns):
             if st.session_state.print_preview_states.get(voter_key, False):
                 st.markdown("---")
                 st.success("✅ **रसिद पूर्वावलोकन / Receipt Preview** — 58mm थर्मल प्रिन्टर")
->>>>>>> 533313b (v1)
                 
                 voter_dict = row.to_dict()
                 receipt_text = format_voter_receipt(voter_dict)
@@ -273,11 +252,7 @@ def show_results_table_with_print(data, columns):
                 # Show the formatted receipt
                 st.code(receipt_text, language=None)
                 
-<<<<<<< HEAD
-                # Download button
-=======
                 # Download and Close buttons
->>>>>>> 533313b (v1)
                 col_d1, col_d2 = st.columns(2)
                 with col_d1:
                     st.download_button(
@@ -285,28 +260,15 @@ def show_results_table_with_print(data, columns):
                         data=receipt_text,
                         file_name=f"voter_{voter_num}.txt",
                         mime="text/plain",
-<<<<<<< HEAD
-                        key=f"download_{idx}",
-=======
                         key=f"download_{voter_key}",
->>>>>>> 533313b (v1)
                         use_container_width=True
                     )
                 
                 with col_d2:
-<<<<<<< HEAD
-                    # Close button WITHOUT st.rerun() - just updates session state
-                    if st.button("❌ बन्द गर्नुहोस् (Close)", key=f"close_{idx}", use_container_width=True):
-                        st.session_state[f'show_print_{idx}'] = False
-                        # NO st.rerun() here! Just set state to False
-                        # User needs to click the card again to collapse it naturally
-                        st.info("💡 रसिद बन्द भयो। कार्ड बन्द गर्न यसलाई पुनः क्लिक गर्नुहोस् / Preview closed. Click card header to collapse.")
-=======
                     # Close button that properly closes the preview
                     if st.button("❌ बन्द गर्नुहोस् (Close)", key=f"close_{voter_key}", use_container_width=True):
                         st.session_state.print_preview_states[voter_key] = False
                         st.rerun()
->>>>>>> 533313b (v1)
 
 def show_results_table(data, columns):
     """Standard table display without print buttons."""
