@@ -1,6 +1,7 @@
 import pandas as pd
 import streamlit as st
 import base64
+import re
 from credentials import USERNAME, PASSWORD
 
 # Set page configuration
@@ -198,8 +199,7 @@ def logout():
 def load_data():
     df = pd.read_excel('voterlist.xlsx')
     
-    # Create lowercase versions for faster case-insensitive Nepali search
-    # This works character by character in Nepali
+    # Create lowercase versions for case-insensitive search
     df['मतदाताको नाम_lower'] = df['मतदाताको नाम'].str.lower()
     df['पिता/माताको नाम_lower'] = df['पिता/माताको नाम'].str.lower()
     df['पति/पत्नीको नाम_lower'] = df['पति/पत्नीको नाम'].str.lower()
@@ -210,19 +210,34 @@ def load_data():
     
     return df
 
-# Fast search function with Nepali character support
-def fast_nepali_search(df, column, search_term):
-    """Optimized search function for Nepali text - searches each character/word"""
+# Ordered substring search function
+def ordered_substring_search(df, column, search_term):
+    """
+    Ordered substring search - matches characters in exact sequence.
+    
+    Examples:
+    - Search "रम" matches "राम", "रमेश"
+    - Search "रम" does NOT match "मर", "अमर"
+    - Characters must appear in the exact order typed
+    """
     if not search_term:
         return df
     
-    # Convert search term to lowercase for case-insensitive search
+    # Convert to lowercase for case-insensitive matching
     search_lower = search_term.lower().strip()
     lower_col = column + '_lower'
     
-    # Use vectorized string operations for speed
-    # This will match any part of the text, including individual Nepali characters
-    mask = df[lower_col].str.contains(search_lower, na=False, regex=False)
+    # Escape special regex characters except spaces
+    search_escaped = re.escape(search_lower)
+    
+    # Create regex pattern: each character can have any characters between them
+    # But they must appear in order
+    # Example: "रम" becomes "र.*म" which matches "राम", "रमेश" but not "मर"
+    pattern = '.*'.join(search_escaped)
+    
+    # Apply the pattern - matches if characters appear in order
+    mask = df[lower_col].str.contains(pattern, na=False, regex=True, case=False)
+    
     return df[mask]
 
 # Main app (only shown after login)
@@ -268,19 +283,39 @@ def main_app():
         
         elif search_option == "मतदाताको नामबाट खोज्नुहोस्":
             st.subheader("मतदाताको नामबाट खोज्नुहोस्")
-            st.caption("नेपाली वर्ण, शब्द, वा नाम खोज्नुहोस् / Search by Nepali character, word, or name")
+            st.caption("🔤 क्रमबद्ध खोज: वर्णहरू क्रमैसँग मेल खान्छ / Ordered search: characters must match in sequence")
+            
+            # Example box
+            with st.expander("📘 उदाहरण / Examples"):
+                st.markdown("""
+                **खोज "रम" ले भेट्छ / Search "रम" finds:**
+                - ✅ **राम** (र-आ-म)
+                - ✅ **रमेश** (र-म-े-श)
+                - ✅ **श्रीराम** (श्री-रा-म)
+                
+                **खोज "रम" ले भेट्दैन / Search "रम" does NOT find:**
+                - ❌ मर (क्रम फरक / wrong order)
+                - ❌ अमर (र पहिले छैन / र not first)
+                
+                **टिप्स:**
+                - "र" = र बाट सुरु हुने सबै नाम
+                - "रा" = रा बाट सुरु हुने नाम
+                - "राम" = राम भएका नाम
+                """)
+            
             search_name = st.text_input("मतदाताको नाम लेख्नुहोस्:", "", key="name_search", 
-                                       placeholder="उदाहरण: राम, रा, र")
+                                       placeholder="उदाहरण: र, रा, राम")
             
             if search_name:
                 with st.spinner('खोज्दै... / Searching...'):
-                    filtered_df = fast_nepali_search(df, 'मतदाताको नाम', search_name)
+                    filtered_df = ordered_substring_search(df, 'मतदाताको नाम', search_name)
                 
                 if not filtered_df.empty:
-                    st.success(f"✅ {len(filtered_df):,} मतदाता भेटियो")
+                    st.success(f"✅ {len(filtered_df):,} मतदाता भेटियो (खोज: '{search_name}')")
                     st.dataframe(filtered_df[display_columns], use_container_width=True, height=400)
                 else:
-                    st.warning("कुनै पनि मतदाता भेटिएन")
+                    st.warning(f"कुनै पनि मतदाता भेटिएन (खोज: '{search_name}')")
+                    st.info("💡 सुझाव: कम वर्ण प्रयोग गरी खोज्नुहोस् जस्तै 'र' वा 'रा'")
             else:
                 st.info("खोज्नको लागि मतदाताको नाम लेख्नुहोस्")
         
@@ -292,7 +327,6 @@ def main_app():
                 try:
                     search_num = int(search_number)
                     with st.spinner('खोज्दै... / Searching...'):
-                        # Use vectorized comparison for speed
                         filtered_df = df[df['मतदाता नं'] == search_num]
                     
                     if not filtered_df.empty:
@@ -307,40 +341,59 @@ def main_app():
         
         elif search_option == "पिता/माताको नामबाट खोज्नुहोस्":
             st.subheader("पिता/माताको नामबाट खोज्नुहोस्")
-            st.caption("नेपाली वर्ण, शब्द, वा नाम खोज्नुहोस् / Search by Nepali character, word, or name")
+            st.caption("🔤 क्रमबद्ध खोज: वर्णहरू क्रमैसँग मेल खान्छ / Ordered search: characters must match in sequence")
+            
+            with st.expander("📘 उदाहरण / Examples"):
+                st.markdown("""
+                - "ह" → हरि, हेमन्त, महेश
+                - "हर" → हरि, हरिश
+                - "हरि" → हरि, हरिकृष्ण
+                """)
+            
             search_parent = st.text_input("पिता वा माताको नाम लेख्नुहोस्:", "", key="parent_search",
-                                         placeholder="उदाहरण: हरि, ह, देवी")
+                                         placeholder="उदाहरण: ह, हर, हरि")
             
             if search_parent:
                 with st.spinner('खोज्दै... / Searching...'):
-                    filtered_df = fast_nepali_search(df, 'पिता/माताको नाम', search_parent)
+                    filtered_df = ordered_substring_search(df, 'पिता/माताको नाम', search_parent)
                 
                 if not filtered_df.empty:
-                    st.success(f"✅ {len(filtered_df):,} मतदाता भेटियो")
+                    st.success(f"✅ {len(filtered_df):,} मतदाता भेटियो (खोज: '{search_parent}')")
                     st.dataframe(filtered_df[display_columns], use_container_width=True, height=400)
                 else:
-                    st.warning("कुनै पनि मतदाता भेटिएन")
+                    st.warning(f"कुनै पनि मतदाता भेटिएन (खोज: '{search_parent}')")
             else:
                 st.info("खोज्नको लागि पिता वा माताको नाम लेख्नुहोस्")
         
         elif search_option == "पति/पत्नीको नामबाट खोज्नुहोस्":
             st.subheader("पति/पत्नीको नामबाट खोज्नुहोस्")
-            st.caption("नेपाली वर्ण, शब्द, वा नाम खोज्नुहोस् / Search by Nepali character, word, or name")
+            st.caption("🔤 क्रमबद्ध खोज: वर्णहरू क्रमैसँग मेल खान्छ / Ordered search: characters must match in sequence")
+            
+            with st.expander("📘 उदाहरण / Examples"):
+                st.markdown("""
+                - "ग" → गीता, गंगा, मनगरी
+                - "गी" → गीता, गीतादेवी
+                - "गीत" → गीता, गीतादेवी
+                """)
+            
             search_spouse = st.text_input("पति वा पत्नीको नाम लेख्नुहोस्:", "", key="spouse_search",
-                                         placeholder="उदाहरण: गीता, गी, ता")
+                                         placeholder="उदाहरण: ग, गी, गीत")
             
             if search_spouse:
                 with st.spinner('खोज्दै... / Searching...'):
-                    # Filter out NaN and '-' values efficiently
+                    # Filter out NaN and '-' values first
                     search_lower = search_spouse.lower().strip()
-                    mask = (df['पति/पत्नीको नाम'] != '-') & df['पति/पत्नीको नाम_lower'].str.contains(search_lower, na=False, regex=False)
+                    search_escaped = re.escape(search_lower)
+                    pattern = '.*'.join(search_escaped)
+                    
+                    mask = (df['पति/पत्नीको नाम'] != '-') & df['पति/पत्नीको नाम_lower'].str.contains(pattern, na=False, regex=True, case=False)
                     filtered_df = df[mask]
                 
                 if not filtered_df.empty:
-                    st.success(f"✅ {len(filtered_df):,} मतदाता भेटियो")
+                    st.success(f"✅ {len(filtered_df):,} मतदाता भेटियो (खोज: '{search_spouse}')")
                     st.dataframe(filtered_df[display_columns], use_container_width=True, height=400)
                 else:
-                    st.warning("कुनै पनि मतदाता भेटिएन")
+                    st.warning(f"कुनै पनि मतदाता भेटिएन (खोज: '{search_spouse}')")
             else:
                 st.info("खोज्नको लागि पति वा पत्नीको नाम लेख्नुहोस्")
         
@@ -389,7 +442,6 @@ def main_app():
                 max_age = st.number_input("अधिकतम उमेर:", min_value=0, max_value=150, value=100)
             
             with st.spinner('खोज्दै... / Searching...'):
-                # Use vectorized comparison for speed
                 filtered_df = df[(df['उमेर(वर्ष)'] >= min_age) & (df['उमेर(वर्ष)'] <= max_age)]
             
             st.success(f"✅ {len(filtered_df):,} मतदाता भेटियो (उमेर: {min_age} - {max_age} वर्ष)")
@@ -398,7 +450,7 @@ def main_app():
         elif search_option == "उन्नत खोज (सबै फिल्टर)":
             st.subheader("🔍 उन्नत खोज - धेरै फिल्टर प्रयोग गर्नुहोस्")
             st.markdown("**तपाईंले चाहानु भएका फिल्टरहरू प्रयोग गर्नुहोस्:**")
-            st.caption("नेपाली वर्ण, शब्द, वा नाम खोज्न सक्नुहुन्छ / Can search by Nepali character, word, or name")
+            st.caption("🔤 क्रमबद्ध खोज: वर्णहरू क्रमैसँग मेल खान्छ / Ordered search")
             
             # Create filter columns
             col1, col2 = st.columns(2)
@@ -406,21 +458,20 @@ def main_app():
             with col1:
                 # Name filter
                 name_filter = st.text_input("मतदाताको नाम:", "", key="adv_name",
-                                           placeholder="उदाहरण: राम, रा, र")
+                                           placeholder="उदाहरण: र, रा, राम")
                 
                 # Parent name filter
                 parent_filter = st.text_input("पिता/माताको नाम:", "", key="adv_parent",
-                                             placeholder="उदाहरण: हरि, ह")
+                                             placeholder="उदाहरण: ह, हर, हरि")
                 
                 # Spouse name filter
                 spouse_filter = st.text_input("पति/पत्नीको नाम:", "", key="adv_spouse",
-                                             placeholder="उदाहरण: गीता, गी")
+                                             placeholder="उदाहरण: ग, गी, गीत")
             
             with col2:
                 # Gender filter
                 unique_genders = df['लिङ्ग'].unique().tolist()
                 gender_options = ["सबै", "पुरुष", "महिला", "अन्य"]
-                # Add data genders if not already in list
                 for g in unique_genders:
                     if g not in gender_options:
                         gender_options.append(g)
@@ -440,20 +491,26 @@ def main_app():
                     # Start with full dataset
                     mask = pd.Series([True] * len(df), index=df.index)
                     
-                    # Apply name filter (Nepali character/word search)
+                    # Apply name filter (ordered substring)
                     if name_filter:
                         name_lower = name_filter.lower().strip()
-                        mask &= df['मतदाताको नाम_lower'].str.contains(name_lower, na=False, regex=False)
+                        name_escaped = re.escape(name_lower)
+                        name_pattern = '.*'.join(name_escaped)
+                        mask &= df['मतदाताको नाम_lower'].str.contains(name_pattern, na=False, regex=True, case=False)
                     
-                    # Apply parent filter (Nepali character/word search)
+                    # Apply parent filter (ordered substring)
                     if parent_filter:
                         parent_lower = parent_filter.lower().strip()
-                        mask &= df['पिता/माताको नाम_lower'].str.contains(parent_lower, na=False, regex=False)
+                        parent_escaped = re.escape(parent_lower)
+                        parent_pattern = '.*'.join(parent_escaped)
+                        mask &= df['पिता/माताको नाम_lower'].str.contains(parent_pattern, na=False, regex=True, case=False)
                     
-                    # Apply spouse filter (Nepali character/word search)
+                    # Apply spouse filter (ordered substring)
                     if spouse_filter:
                         spouse_lower = spouse_filter.lower().strip()
-                        mask &= (df['पति/पत्नीको नाम'] != '-') & df['पति/पत्नीको नाम_lower'].str.contains(spouse_lower, na=False, regex=False)
+                        spouse_escaped = re.escape(spouse_lower)
+                        spouse_pattern = '.*'.join(spouse_escaped)
+                        mask &= (df['पति/पत्नीको नाम'] != '-') & df['पति/पत्नीको नाम_lower'].str.contains(spouse_pattern, na=False, regex=True, case=False)
                     
                     # Apply gender filter
                     if gender_filter != "सबै":
@@ -472,11 +529,11 @@ def main_app():
                     # Show applied filters
                     with st.expander("लागू गरिएका फिल्टरहरू"):
                         if name_filter:
-                            st.write(f"- नाम: {name_filter}")
+                            st.write(f"- नाम: '{name_filter}' (क्रमबद्ध)")
                         if parent_filter:
-                            st.write(f"- पिता/माता: {parent_filter}")
+                            st.write(f"- पिता/माता: '{parent_filter}' (क्रमबद्ध)")
                         if spouse_filter:
-                            st.write(f"- पति/पत्नी: {spouse_filter}")
+                            st.write(f"- पति/पत्नी: '{spouse_filter}' (क्रमबद्ध)")
                         if gender_filter != "सबै":
                             st.write(f"- लिङ्ग: {gender_filter}")
                         if min_age_filter > 0 or max_age_filter < 150:
@@ -485,6 +542,7 @@ def main_app():
                     st.dataframe(filtered_df[display_columns], use_container_width=True, height=500)
                 else:
                     st.warning("⚠️ कुनै पनि मतदाता भेटिएन। कृपया फिल्टर परिवर्तन गर्नुहोस्।")
+                    st.info("💡 सुझाव: कम वर्ण प्रयोग गरी खोज्नुहोस्")
             else:
                 st.info("👆 माथिका फिल्टरहरू भर्नुहोस् र 'खोज्नुहोस्' बटन थिच्नुहोस्")
         
