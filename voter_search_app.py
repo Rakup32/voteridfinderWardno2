@@ -180,7 +180,7 @@ def show_results_table(data, columns):
 
 def main_app():
     st.title("🗳️ मतदाता सूची खोज प्रणाली")
-    st.markdown("**Bharatpur Ward No-02 Voter mVoter List Search System**")
+    st.markdown("**Bharatpur Ward No-02 Voter List Search System**")
     
     with st.sidebar:
         if st.button("🚪 Logout / बाहिर निस्कनुहोस्", use_container_width=True):
