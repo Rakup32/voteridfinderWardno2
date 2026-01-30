@@ -95,7 +95,7 @@ def login_page():
         <span class="login-badge">Secure access</span>
         <div class="login-title">सुरक्षित प्रवेश</div>
         <div class="login-subtitle">मतदाता सूची खोज प्रणाली</div>
-        <div class="login-subtitle-en">Baratpur ward no 02 Voter List Search System</div>
+        <div class="login-subtitle-en">Baratpur ward no-02 Voter List Search System</div>
     </div>
     <div class="login-divider"></div>
     </div>
