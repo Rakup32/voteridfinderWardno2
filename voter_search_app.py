@@ -252,23 +252,104 @@ def show_results_table_with_print(data, columns):
                 # Show the formatted receipt
                 st.code(receipt_text, language=None)
                 
-                # Download and Close buttons
-                col_d1, col_d2 = st.columns(2)
+                # Create HTML version for printing
+                html_receipt = f"""
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta charset="UTF-8">
+                    <style>
+                        @page {{
+                            size: 58mm auto;
+                            margin: 5mm;
+                        }}
+                        body {{
+                            font-family: 'Courier New', monospace;
+                            font-size: 10pt;
+                            line-height: 1.4;
+                            width: 58mm;
+                            margin: 0 auto;
+                            padding: 5mm;
+                        }}
+                        pre {{
+                            white-space: pre-wrap;
+                            word-wrap: break-word;
+                            font-family: 'Courier New', monospace;
+                            font-size: 10pt;
+                            margin: 0;
+                        }}
+                        @media print {{
+                            body {{
+                                width: 58mm;
+                            }}
+                        }}
+                    </style>
+                </head>
+                <body>
+                    <pre>{receipt_text}</pre>
+                </body>
+                </html>
+                """
+                
+                # Action buttons
+                col_d1, col_d2, col_d3 = st.columns(3)
+                
                 with col_d1:
+                    # Browser Print Button
+                    st.markdown(f"""
+                    <button onclick="printReceipt_{voter_key}()" style="
+                        background-color: #0066cc;
+                        color: white;
+                        border: none;
+                        padding: 0.5rem 1rem;
+                        border-radius: 4px;
+                        cursor: pointer;
+                        width: 100%;
+                        font-size: 14px;
+                        font-weight: 500;
+                    ">
+                        🖨️ ब्राउजरमा प्रिन्ट गर्नुहोस्<br>(Browser Print)
+                    </button>
+                    <script>
+                    function printReceipt_{voter_key}() {{
+                        var printWindow = window.open('', '', 'height=600,width=300');
+                        printWindow.document.write(`{html_receipt}`);
+                        printWindow.document.close();
+                        printWindow.focus();
+                        setTimeout(function() {{
+                            printWindow.print();
+                            printWindow.close();
+                        }}, 250);
+                    }}
+                    </script>
+                    """, unsafe_allow_html=True)
+                
+                with col_d2:
+                    # Download TXT
                     st.download_button(
-                        label="💾 रसिद डाउनलोड गर्नुहोस् (Download Receipt)",
+                        label="💾 TXT डाउनलोड\n(Download TXT)",
                         data=receipt_text,
                         file_name=f"voter_{voter_num}.txt",
                         mime="text/plain",
-                        key=f"download_{voter_key}",
+                        key=f"download_txt_{voter_key}",
                         use_container_width=True
                     )
                 
-                with col_d2:
-                    # Close button that properly closes the preview
-                    if st.button("❌ बन्द गर्नुहोस् (Close)", key=f"close_{voter_key}", use_container_width=True):
-                        st.session_state.print_preview_states[voter_key] = False
-                        st.rerun()
+                with col_d3:
+                    # Download HTML
+                    st.download_button(
+                        label="📄 HTML डाउनलोड\n(Download HTML)",
+                        data=html_receipt,
+                        file_name=f"voter_{voter_num}.html",
+                        mime="text/html",
+                        key=f"download_html_{voter_key}",
+                        use_container_width=True
+                    )
+                
+                # Close button (full width below)
+                if st.button("❌ बन्द गर्नुहोस् (Close)", key=f"close_{voter_key}", use_container_width=True):
+                    st.session_state.print_preview_states[voter_key] = False
+                    st.rerun()
 
 def show_results_table(data, columns):
     """Standard table display without print buttons."""
