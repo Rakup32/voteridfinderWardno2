@@ -6,6 +6,7 @@ import base64
 import time
 import extra_streamlit_components as stx
 from credentials import USERNAME, PASSWORD
+from print_logic import format_voter_receipt, show_print_dialog, create_print_preview
 
 def _normalize_unicode(s):
     """Normalize to NFC for consistent Unicode-aware Nepali character comparison."""
@@ -169,10 +170,9 @@ def get_display_columns(df):
     # 1. Start with standard columns if they exist in the file
     final_cols = [c for c in STANDARD_COLUMNS if c in df.columns]
     
-    # 2. Add any NEW columns that are in the file but not in standard list
-    #    And explicitly exclude our internal '_lower' helper columns
+    # 2. Add any columns NOT in standard list, NOT ending in _lower
     for c in df.columns:
-        if c not in final_cols and not c.endswith('_lower'):
+        if c not in STANDARD_COLUMNS and not c.endswith('_lower') and c not in final_cols:
             final_cols.append(c)
             
     return final_cols
@@ -192,8 +192,53 @@ def unicode_prefix_search(df, column, search_term):
     mask = df[lower_col].str.startswith(normalized, na=False)
     return df[mask]
 
+def show_results_table_with_print(data, columns):
+    """Display results table with print buttons for each row."""
+    if data.empty:
+        return
+    
+    # Display basic table info
+    st.caption(f"📊 मतदाता संख्या: {len(data):,}")
+    
+    # Add print buttons in an expander for each row
+    for idx, row in data.iterrows():
+        with st.expander(f"🗳️ {row.get('मतदाताको नाम', 'N/A')} - मतदाता नं: {row.get('मतदाता नं', 'N/A')}"):
+            col1, col2 = st.columns([3, 1])
+            
+            with col1:
+                # Display voter information
+                for col in columns:
+                    if col in row.index:
+                        st.text(f"{col}: {row[col]}")
+            
+            with col2:
+                # Print button
+                if st.button("🖨️ Print", key=f"print_btn_{idx}"):
+                    st.session_state[f'show_print_{idx}'] = True
+            
+            # Show print preview if button clicked
+            if st.session_state.get(f'show_print_{idx}', False):
+                st.markdown("---")
+                voter_dict = row.to_dict()
+                receipt_text = format_voter_receipt(voter_dict)
+                
+                st.code(receipt_text, language=None)
+                
+                # Download button
+                st.download_button(
+                    label="💾 Download Receipt",
+                    data=receipt_text,
+                    file_name=f"voter_{row.get('मतदाता नं', idx)}.txt",
+                    mime="text/plain",
+                    key=f"download_{idx}"
+                )
+                
+                if st.button("❌ Close Preview", key=f"close_{idx}"):
+                    st.session_state[f'show_print_{idx}'] = False
+                    st.rerun()
+
 def show_results_table(data, columns):
-    """Dynamically adjust table height."""
+    """Standard table display without print buttons."""
     if data.empty:
         return
     calculated_height = (len(data) + 1) * 35 
@@ -222,6 +267,18 @@ def main_app():
             return
 
         st.sidebar.header("खोज विकल्प")
+        
+        # Add display mode toggle
+        st.sidebar.markdown("---")
+        display_mode = st.sidebar.radio(
+            "प्रदर्शन मोड / Display Mode:",
+            ["📋 Table View", "🖨️ Print View"],
+            index=0
+        )
+        use_print_view = (display_mode == "🖨️ Print View")
+        
+        st.sidebar.markdown("---")
+        
         default_index = 7
         search_option = st.sidebar.selectbox(
             "खोज प्रकार छान्नुहोस्:",
@@ -231,10 +288,18 @@ def main_app():
             index=default_index
         )
         
+        # Helper function to show results based on mode
+        def display_results(filtered_df, display_cols):
+            if use_print_view:
+                show_results_table_with_print(filtered_df, display_cols)
+            else:
+                show_results_table(filtered_df, display_cols)
+        
         if search_option == "सबै डाटा हेर्नुहोस्":
             st.subheader("सम्पूर्ण मतदाता सूची")
-            show_results_table(df, display_columns)
-            st.info(f"कुल मतदाता संख्या: {len(df):,}")
+            display_results(df, display_columns)
+            if not use_print_view:
+                st.info(f"कुल मतदाता संख्या: {len(df):,}")
         
         elif search_option == "मतदाताको नामबाट खोज्नुहोस्":
             st.subheader("मतदाताको नामबाट खोज्नुहोस्")
@@ -246,8 +311,9 @@ def main_app():
             if search_name:
                 filtered_df = unicode_prefix_search(df, 'मतदाताको नाम', search_name)
                 if not filtered_df.empty:
-                    st.success(f"✅ {len(filtered_df):,} मतदाता भेटियो")
-                    show_results_table(filtered_df, display_columns)
+                    if not use_print_view:
+                        st.success(f"✅ {len(filtered_df):,} मतदाता भेटियो")
+                    display_results(filtered_df, display_columns)
                 else:
                     st.warning("कुनै पनि मतदाता भेटिएन")
         
@@ -259,7 +325,7 @@ def main_app():
                     filtered_df = df[df['मतदाता नं'] == int(search_number)]
                     if not filtered_df.empty:
                         st.success("✅ मतदाता भेटियो")
-                        show_results_table(filtered_df, display_columns)
+                        display_results(filtered_df, display_columns)
                     else:
                         st.warning("कुनै पनि मतदाता भेटिएन")
                 except ValueError:
@@ -271,8 +337,9 @@ def main_app():
             if search_parent:
                 filtered_df = unicode_prefix_search(df, 'पिता/माताको नाम', search_parent)
                 if not filtered_df.empty:
-                    st.success(f"✅ {len(filtered_df):,} भेटियो")
-                    show_results_table(filtered_df, display_columns)
+                    if not use_print_view:
+                        st.success(f"✅ {len(filtered_df):,} भेटियो")
+                    display_results(filtered_df, display_columns)
                 else:
                     st.warning("भेटिएन")
 
@@ -283,8 +350,9 @@ def main_app():
                 filtered_df = unicode_prefix_search(df, 'पति/पत्नीको नाम', search_spouse)
                 filtered_df = filtered_df[filtered_df['पति/पत्नीको नाम'] != '-']
                 if not filtered_df.empty:
-                    st.success(f"✅ {len(filtered_df):,} भेटियो")
-                    show_results_table(filtered_df, display_columns)
+                    if not use_print_view:
+                        st.success(f"✅ {len(filtered_df):,} भेटियो")
+                    display_results(filtered_df, display_columns)
                 else:
                     st.warning("भेटिएन")
 
@@ -298,8 +366,10 @@ def main_app():
                 filtered_df = df
             else:
                 filtered_df = df[df['लिङ्ग'] == selected_gender]
-            st.success(f"✅ {len(filtered_df):,} मतदाता भेटियो")
-            show_results_table(filtered_df, display_columns)
+            
+            if not use_print_view:
+                st.success(f"✅ {len(filtered_df):,} मतदाता भेटियो")
+            display_results(filtered_df, display_columns)
 
         elif search_option == "उमेर दायराबाट खोज्नुहोस्":
             st.subheader("उमेर दायराबाट खोज्नुहोस्")
@@ -310,8 +380,10 @@ def main_app():
             age_ok = df['उमेर(वर्ष)'].notna()
             in_range = (df['उमेर(वर्ष)'] >= min_age) & (df['उमेर(वर्ष)'] <= max_age)
             filtered_df = df[age_ok & in_range]
-            st.success(f"✅ {len(filtered_df):,} मतदाता भेटियो")
-            show_results_table(filtered_df, display_columns)
+            
+            if not use_print_view:
+                st.success(f"✅ {len(filtered_df):,} मतदाता भेटियो")
+            display_results(filtered_df, display_columns)
 
         elif search_option == "उन्नत खोज (सबै फिल्टर)":
             st.subheader("🔍 उन्नत खोज")
@@ -345,8 +417,9 @@ def main_app():
                 filtered_df = df[mask]
                 st.markdown("---")
                 if not filtered_df.empty:
-                    st.success(f"✅ {len(filtered_df):,} मतदाता भेटियो")
-                    show_results_table(filtered_df, display_columns)
+                    if not use_print_view:
+                        st.success(f"✅ {len(filtered_df):,} मतदाता भेटियो")
+                    display_results(filtered_df, display_columns)
                 else:
                     st.warning("कुनै पनि मतदाता भेटिएन")
 
