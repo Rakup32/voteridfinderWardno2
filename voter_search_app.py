@@ -245,7 +245,7 @@ def _build_modal_block(receipt_text, voter_num):
 ">
   <div style="
     background:#fff;border-radius:14px;width:95%;max-width:720px;
-    max-height:92vh;overflow-y:auto;box-shadow:0 30px 60px rgba(0,0,0,.4);
+    max-height:95vh;overflow-y:auto;box-shadow:0 30px 60px rgba(0,0,0,.4);
     animation:slideDown .25s ease;
   ">
     <!-- header -->
@@ -266,8 +266,8 @@ def _build_modal_block(receipt_text, voter_num):
       <div style="
         background:#f7fafc;border:2px solid #e2e8f0;border-radius:8px;
         padding:18px 20px;font-family:'Courier New',monospace;font-size:1.1rem;
-        white-space:pre-wrap;line-height:1.6;max-height:500px;overflow-y:auto;
-        margin-bottom:20px;
+        white-space:pre-wrap;word-wrap:break-word;line-height:1.6;
+        overflow:visible;margin-bottom:20px;
       ">{receipt_text}</div>
 
       <!-- 3 action buttons -->

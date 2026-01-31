@@ -173,9 +173,8 @@ def create_print_preview(voter_data):
         font-size: 14px;
         line-height: 1.6;
         white-space: pre-wrap;
-        overflow-x: auto;
-        max-height: 600px;
-        overflow-y: auto;
+        word-wrap: break-word;
+        overflow: visible;
     ">{receipt_text}</div>
     """, unsafe_allow_html=True)
     
