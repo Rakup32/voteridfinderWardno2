@@ -10,7 +10,7 @@ from print_logic import format_voter_receipt, show_print_dialog, create_print_pr
 
 def _normalize_unicode(s):
     """Normalize to NFC for consistent Unicode-aware Nepali character comparison."""
-    if not isinstance(s, str) or not s:    streamlit run voter_search_app_improved.py
+    if not isinstance(s, str) or not s:
         return s
     return unicodedata.normalize("NFC", s.strip().lower())
 
@@ -759,4 +759,3 @@ if not st.session_state.logged_in:
     login_page()
 else:
     main_app()
-
