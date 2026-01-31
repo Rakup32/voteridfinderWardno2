@@ -16574,8 +16574,7 @@ COMMON_NAMES = {
     'toola prasada roopa': 'तुल प्रसाद रुपा',
     'toola rama bhavi kala': 'तुला राम भवि कला',
     'toola rama ghimire': 'तुला राम घिमिरे',
-    'toola rama rijala 
-jaisi': 'तुला राम रिजाल जैसी',
+    'toola rama rijala jaisi': 'तुला राम रिजाल जैसी',
     'toolak': 'टुलक',
     'toolaka': 'टुलका',
     'toolaka prasada vishvakarma': 'टुलक प्रसाद विश्वकर्मा',
