@@ -6,7 +6,8 @@ import base64
 import time
 import extra_streamlit_components as stx
 from credentials import USERNAME, PASSWORD
-from print_logic import format_voter_receipt
+from print_logic import format_voter_receipt, show_print_dialog, create_print_preview
+from roman_to_nepali import smart_convert, is_devanagari
 
 def _normalize_unicode(s):
     """Normalize to NFC for consistent Unicode-aware Nepali character comparison."""
@@ -40,7 +41,7 @@ def get_base64_image(image_path):
 
 bell_image_base64 = get_base64_image("bell.png")
 
-# Enhanced Custom CSS
+# Custom CSS
 st.markdown("""
     <style>
     .main { padding: 0.75rem 1rem; max-width: 100%; }
@@ -51,8 +52,6 @@ st.markdown("""
     .stButton > button { min-height: 44px !important; padding: 0.5rem 1rem !important; font-size: 1rem !important; }
     .stSelectbox > div { min-height: 44px !important; }
     [data-testid="stSidebar"] { min-width: 260px; }
-    
-    /* Login Page Styling */
     .login-wrapper { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 1rem 1rem 0.5rem; }
     .login-card { width: 100%; max-width: 560px; padding: 2rem 1.75rem 0; text-align: center; margin: 0 auto; display: flex; flex-direction: column; align-items: center; }
     .login-logo { width: 80px; height: 80px; margin: 0 auto 1rem; border-radius: 14px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.12); background: #f7fafc; animation: login-swing 2s ease-in-out infinite; }
@@ -66,47 +65,12 @@ st.markdown("""
     .login-footer { margin-top: 1.5rem; font-size: 0.75rem; color: #a0aec0; text-align: center; }
     .main .block-container > div:has(.login-wrapper) { margin-bottom: 0 !important; }
     .main [data-testid="stForm"] { max-width: 400px; margin-left: auto !important; margin-right: auto !important; }
-    
-    /* Print Info Box */
-    .print-info-box { 
-        background: linear-gradient(135deg, #e6fffa 0%, #b2f5ea 100%); 
-        border-left: 4px solid #38b2ac; 
-        padding: 1.25rem; 
-        margin: 1rem 0; 
-        border-radius: 8px;
-        box-shadow: 0 2px 8px rgba(56, 178, 172, 0.15);
-    }
-    .print-info-box strong { color: #234e52; font-size: 1.1rem; }
-    
-    /* Voter Card */
-    .voter-card { 
-        background: #f7fafc; 
-        border: 1px solid #e2e8f0; 
-        padding: 1rem; 
-        margin: 0.75rem 0; 
-        border-radius: 8px;
-        transition: all 0.3s ease;
-    }
-    .voter-card:hover {
-        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-        transform: translateY(-2px);
-    }
-    
-    /* Success Message Enhancement */
-    .stSuccess { 
-        border-radius: 8px;
-        border-left: 4px solid #38a169;
-    }
-    
-    @media screen and (max-width: 768px) { 
-        .main { padding: 0.5rem 0.75rem; } 
-        h1 { font-size: 1.35rem !important; }
-        .print-info-box { padding: 1rem; }
-    }
-    @media screen and (max-width: 480px) { 
-        .main { padding: 0.4rem 0.5rem; } 
-        h1 { font-size: 1.2rem !important; }
-    }
+    .print-info-box { background: #e6fffa; border-left: 4px solid #38b2ac; padding: 1rem; margin: 0.5rem 0; border-radius: 4px; }
+    .voter-card { background: #f7fafc; border: 1px solid #e2e8f0; padding: 0.75rem; margin: 0.5rem 0; border-radius: 6px; }
+    .roman-badge { background: #edf2f7; color: #4a5568; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem; margin-left: 0.5rem; display: inline-block; }
+    .conversion-preview { background: #f7fafc; border: 1px solid #e2e8f0; padding: 0.5rem; margin: 0.5rem 0; border-radius: 4px; font-size: 0.9rem; }
+    @media screen and (max-width: 768px) { .main { padding: 0.5rem 0.75rem; } h1 { font-size: 1.35rem !important; } }
+    @media screen and (max-width: 480px) { .main { padding: 0.4rem 0.5rem; } h1 { font-size: 1.2rem !important; } }
     </style>
     """, unsafe_allow_html=True)
 
@@ -152,18 +116,18 @@ def login_page():
 
         if submit:
             if not USERNAME and not PASSWORD:
-                st.error("⚠️ Setup credentials in .env file or Streamlit secrets")
+                st.error("Setup credentials in .env")
             elif check_login(username, password):
                 st.session_state.logged_in = True
                 cookie_manager.set('voter_auth', 'true', expires_at=None, key="set_auth")
-                st.success("✅ लगइन सफल भयो! (Login Success)")
+                st.success("लगइन सफल भयो! (Login Success)")
                 st.balloons()
                 time.sleep(1)
                 st.rerun()
             else:
-                st.error("❌ गलत प्रयोगकर्ता नाम वा पासवर्ड।")
+                st.error("गलत प्रयोगकर्ता नाम वा पासवर्ड।")
 
-    st.markdown('<div class="login-footer">🔒 Official use only • Authorized personnel</div>', unsafe_allow_html=True)
+    st.markdown('<div class="login-footer">Official use only • Authorized personnel</div>', unsafe_allow_html=True)
 
 def logout():
     st.session_state.logged_in = False
@@ -171,7 +135,9 @@ def logout():
     time.sleep(0.5)
     st.rerun()
 
-# We keep standard columns to preserve order
+# --------------------------------
+
+# We keep standard columns to preserve order, but we will add new ones dynamically
 STANDARD_COLUMNS = [
     'सि.नं.', 'मतदाता नं', 'मतदाताको नाम', 'उमेर(वर्ष)', 'लिङ्ग',
     'पति/पत्नीको नाम', 'पिता/माताको नाम'
@@ -188,7 +154,8 @@ def load_data():
     if 'उमेर(वर्ष)' in df.columns:
         df['उमेर(वर्ष)'] = pd.to_numeric(df['उमेर(वर्ष)'], errors='coerce')
 
-    # Create helper columns for search
+    # Create helper columns for search (ending in _lower)
+    # These will be hidden from the final view automatically
     if 'मतदाताको नाम' in df.columns:
         df['मतदाताको नाम_lower'] = df['मतदाताको नाम'].astype(str).map(lambda s: _normalize_unicode(s))
     if 'पिता/माताको नाम' in df.columns:
@@ -201,247 +168,177 @@ def load_data():
     return df
 
 def get_display_columns(df):
-    """Returns ALL columns from Excel, excluding helper columns."""
-    final_cols = [c for c in STANDARD_COLUMNS if c in df.columns]
+    """
+    Return columns to display: standard columns in order, plus any extra columns found
+    that are not internal/helper columns (those ending with _lower).
+    """
+    display_cols = []
+    extra_cols = []
     
-    for c in df.columns:
-        if c not in STANDARD_COLUMNS and not c.endswith('_lower') and c not in final_cols and c != 'मतदाता विवरणहरू':
-            final_cols.append(c)
-            
-    return final_cols
+    # First add standard columns in the desired order
+    for col in STANDARD_COLUMNS:
+        if col in df.columns:
+            display_cols.append(col)
+    
+    # Then add any extra columns that aren't standard and aren't helper columns
+    for col in df.columns:
+        if col not in STANDARD_COLUMNS and not col.endswith('_lower'):
+            extra_cols.append(col)
+    
+    return display_cols + extra_cols
 
-def unicode_prefix_search(df, column, search_term):
-    if not search_term or column not in df.columns:
-        return df
-    normalized = _normalize_unicode(search_term)
-    if not normalized:
+def unicode_prefix_search(df, column_name, search_term):
+    """
+    Search with auto-conversion from Roman to Devanagari if needed.
+    Performs prefix matching on normalized Unicode.
+    """
+    if not search_term:
         return df
     
-    lower_col = column + "_lower"
-    if lower_col not in df.columns:
-        return df
+    # Convert Roman input to Devanagari if needed
+    converted_term = smart_convert(search_term)
+    normalized_search = _normalize_unicode(converted_term)
+    
+    lower_col = column_name + '_lower'
+    if lower_col in df.columns:
+        mask = df[lower_col].str.startswith(normalized_search, na=False)
+        return df[mask]
+    return df[df[column_name].astype(str).str.lower().str.startswith(normalized_search, na=False)]
+
+def show_conversion_preview(input_text, key_suffix=""):
+    """Show a preview of Roman to Devanagari conversion if applicable"""
+    if input_text and not is_devanagari(input_text):
+        converted = smart_convert(input_text)
+        if converted != input_text:
+            st.markdown(
+                f'<div class="conversion-preview">🔄 Converting: <strong>{input_text}</strong> → <strong>{converted}</strong></div>',
+                unsafe_allow_html=True
+            )
+            return converted
+    return input_text
+
+def show_results_table(filtered_df, display_cols):
+    """Display search results in a table format"""
+    if filtered_df.empty:
+        st.warning("कुनै पनि मतदाता भेटिएन")
+        return
+    
+    st.dataframe(
+        filtered_df[display_cols],
+        use_container_width=True,
+        hide_index=True,
+        height=min(600, 35 + 35 * len(filtered_df))
+    )
+
+def show_results_table_with_print(filtered_df, display_cols):
+    """Display search results with print buttons"""
+    if filtered_df.empty:
+        st.warning("कुनै पनि मतदाता भेटिएन")
+        return
+    
+    # Add a new column for printing
+    cols_with_print = display_cols + ['मतदाता विवरणहरू']
+    
+    # Create a temporary dataframe for display
+    display_df = filtered_df[display_cols].copy()
+    display_df['मतदाता विवरणहरू'] = 'Print'
+    
+    # Use st.dataframe with on_select callback
+    event = st.dataframe(
+        display_df,
+        use_container_width=True,
+        hide_index=True,
+        on_select="rerun",
+        selection_mode="single-row",
+        height=min(600, 35 + 35 * len(display_df))
+    )
+    
+    # Handle row selection for printing
+    if event.selection.rows:
+        selected_row_idx = event.selection.rows[0]
+        selected_data = filtered_df.iloc[selected_row_idx].to_dict()
         
-    mask = df[lower_col].str.startswith(normalized, na=False)
-    return df[mask]
-
-def _build_direct_download_button(receipt_text, voter_num, voter_name):
-    """Simple button that directly downloads TXT for thermal printer."""
-    import json
-    receipt_js = json.dumps(receipt_text)
-    voter_num_js = json.dumps(str(voter_num))
-
-    return f"""
-<div style="width:100%;">
-<button onclick="dlTXT()" style="
-    width:100%;padding:16px 10px;border:none;border-radius:10px;cursor:pointer;
-    background:linear-gradient(135deg,#38b2ac 0%,#319795 100%);
-    color:#fff;font-size:16px;font-weight:600;line-height:1.5;
-    transition:all .3s ease;box-shadow: 0 4px 15px rgba(56, 178, 172, 0.3);
-  " onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='0 8px 20px rgba(56,178,172,.5)'"
-  onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='0 4px 15px rgba(56,178,172,.3)'">
-  💾 थर्मल प्रिन्टरको लागि डाउनलोड गर्नुहोस्<br>
-  <span style="font-size:14px;opacity:.9;font-weight:500">(Download TXT for Thermal Printer)</span>
-</button>
-
-<div id="successMsg_{voter_num}" style="
-    display:none;
-    background:linear-gradient(135deg,#48bb78 0%,#38a169 100%);
-    color:white;padding:12px;border-radius:8px;margin-top:10px;
-    text-align:center;font-weight:600;font-size:14px;
-    animation:successFade .3s ease;">
-    ✅ डाउनलोड सफल भयो! (Download Successful!)
-</div>
-
-<script>
-(function(){{
-  var receiptText = {receipt_js};
-  var voterNum = {voter_num_js};
-  var successMsg = document.getElementById('successMsg_' + voterNum);
-
-  window.dlTXT = function() {{
-    var b = new Blob([receiptText],{{type:'text/plain;charset=utf-8'}});
-    var a = document.createElement('a');
-    a.href = URL.createObjectURL(b);
-    a.download = 'voter_' + voterNum + '_thermal.txt';
-    a.click();
-    
-    // Show success message
-    successMsg.style.display = 'block';
-    setTimeout(function() {{
-      successMsg.style.display = 'none';
-    }}, 3000);
-  }}
-}})();
-</script>
-
-<style>
-  @keyframes successFade {{
-    from {{ opacity:0; transform:scale(0.95); }}
-    to {{ opacity:1; transform:scale(1); }}
-  }}
-</style>
-</div>
-"""
-
-def show_results_table_with_print(data, columns):
-    """Display results with direct download for thermal printer."""
-    if data.empty:
-        return
-
-    st.markdown("""
-    <div class="print-info-box">
-        <strong>🖨️ थर्मल प्रिन्टर मोड / Thermal Printer Mode</strong><br>
-        📋 प्रत्येक मतदाताको TXT फाइल डाउनलोड गर्नुहोस्।<br>
-        💡 TXT फाइल सिधै थर्मल प्रिन्टरमा प्रिन्ट गर्न सकिन्छ।
-    </div>
-    """, unsafe_allow_html=True)
-
-    st.caption(f"📊 कुल मतदाता: {len(data):,}")
-
-    for idx, row in data.iterrows():
-        voter_name = row.get('मतदाताको नाम', 'N/A')
-        voter_num = row.get('मतदाता नं', 'N/A')
-        age = row.get('उमेर(वर्ष)', 'N/A')
-        gender = row.get('लिङ्ग', 'N/A')
-
-        with st.expander(f"🗳️ {voter_name} — नं: {voter_num} | {gender}, {age} वर्ष", expanded=False):
-            col1, col2 = st.columns([3, 1])
-
-            with col1:
-                for col in columns:
-                    if col in row.index:
-                        value = row[col] if pd.notna(row[col]) else '-'
-                        st.text(f"{col}: {value}")
-
-            with col2:
-                voter_dict = row.to_dict()
-                receipt_text = format_voter_receipt(voter_dict)
-                download_button = _build_direct_download_button(receipt_text, voter_num, voter_name)
-                st.components.v1.html(download_button, height=120, scrolling=False)
-
-def show_results_table(data, columns):
-    """Standard table display without print buttons."""
-    if data.empty:
-        return
-    calculated_height = (len(data) + 1) * 35 
-    display_height = max(150, min(calculated_height, 800))
-    st.dataframe(data[columns], use_container_width=True, height=display_height, hide_index=True)
+        with st.expander("🖨️ Print Preview", expanded=True):
+            show_print_dialog(selected_data)
 
 def main_app():
-    st.title("🗳️ मतदाता सूची खोज प्रणाली")
-    st.markdown("**Voter List Search System**")
-    
-    with st.sidebar:
-        if st.button("🚪 Logout / बाहिर निस्कनुहोस्", use_container_width=True):
-            logout()
-    
-    st.markdown("---")
-    
     try:
-        with st.spinner('📂 डाटा लोड गर्दै... / Loading data...'):
-            df = load_data()
-
+        df = load_data()
         display_columns = get_display_columns(df)
         
-        if not display_columns:
-            st.error("❌ Excel columns missing.")
-            return
-
-        st.sidebar.header("🔍 खोज विकल्प")
-        st.sidebar.markdown("---")
-        st.sidebar.subheader("📊 प्रदर्शन मोड / Display Mode")
+        st.markdown('<h1 style="text-align:center;">🗳️ मतदाता सूची खोज प्रणाली</h1>', unsafe_allow_html=True)
         
-        display_mode = st.sidebar.radio(
-            "मोड छान्नुहोस् / Select Mode:",
-            ["📋 Table View (तालिका)", "🖨️ Print View (थर्मल प्रिन्टर)"],
-            index=0,
-            help="Table View: सबै मतदाता एकै पटक हेर्नुहोस् | Print View: थर्मल प्रिन्टरको लागि TXT डाउनलोड गर्नुहोस्"
-        )
-        use_print_view = (display_mode == "🖨️ Print View (थर्मल प्रिन्टर)")
+        # Sidebar configuration
+        st.sidebar.title("खोज विकल्पहरू")
         
-        if use_print_view:
-            st.sidebar.success("✅ **Thermal Printer Mode**\n\nप्रत्येक मतदाताको TXT डाउनलोड बटन देखिनेछ।")
+        # Add Roman typing info
+        st.sidebar.info("💡 **Roman Typing Enabled**\n\nType in English (e.g., 'ram', 'krishna') and it will auto-convert to Nepali!")
         
-        st.sidebar.markdown("---")
-        
-        # Set उन्नत खोज as default (index 0)
-        default_index = 0
-        search_option = st.sidebar.selectbox(
+        search_option = st.sidebar.radio(
             "खोज प्रकार छान्नुहोस्:",
-            ["उन्नत खोज (सबै फिल्टर)", "सबै डाटा हेर्नुहोस्", "मतदाताको नामबाट खोज्नुहोस्", "मतदाता नंबरबाट खोज्नुहोस्", 
-             "पिता/माताको नामबाट खोज्नुहोस्", "पति/पत्नीको नामबाट खोज्नुहोस्",
-             "लिङ्गबाट फिल्टर गर्नुहोस्", "उमेर दायराबाट खोज्नुहोस्"],
-            index=default_index
+            [
+                "सबै डाटा हेर्नुहोस्",
+                "मतदाताको नामबाट खोज्नुहोस्",
+                "मतदाता नंबरबाट खोज्नुहोस्",
+                "पिता/माताको नामबाट खोज्नुहोस्",
+                "पति/पत्नीको नामबाट खोज्नुहोस्",
+                "लिङ्गबाट फिल्टर गर्नुहोस्",
+                "उमेर दायराबाट खोज्नुहोस्",
+                "उन्नत खोज (सबै फिल्टर)"
+            ]
         )
         
+        # Print View Toggle
+        use_print_view = st.sidebar.checkbox("🖨️ Enable Print View", value=False)
+        if use_print_view:
+            st.sidebar.caption("Click on any row to preview print format")
+        
+        # Logout button
+        if st.sidebar.button("🚪 लग आउट / Logout"):
+            logout()
+        
+        # Helper function to show results based on mode
         def display_results(filtered_df, display_cols):
             if use_print_view:
                 show_results_table_with_print(filtered_df, display_cols)
             else:
                 show_results_table(filtered_df, display_cols)
         
-        if search_option == "उन्नत खोज (सबै फिल्टर)":
-            st.subheader("🔍 उन्नत खोज / Advanced Search")
-            col1, col2 = st.columns(2)
-            with col1:
-                name_filter = st.text_input("मतदाताको नाम:", key="adv_name")
-                parent_filter = st.text_input("पिता/माताको नाम:", key="adv_parent")
-                spouse_filter = st.text_input("पति/पत्नीको नाम:", key="adv_spouse")
-            with col2:
-                genders = ["सबै"] + list(set([g for g in df['लिङ्ग'].unique().tolist() if pd.notna(g)] + ["पुरुष", "महिला"]))
-                gender_filter = st.selectbox("लिङ्ग:", genders, key="adv_gender")
-                ac1, ac2 = st.columns(2)
-                min_age_filter = ac1.number_input("Min Age:", value=0, key="adv_min")
-                max_age_filter = ac2.number_input("Max Age:", value=150, key="adv_max")
-
-            if st.button("🔍 खोज्नुहोस् / Search", type="primary", use_container_width=True):
-                mask = pd.Series([True] * len(df), index=df.index)
-                if name_filter:
-                    mask &= df['मतदाताको नाम_lower'].str.startswith(_normalize_unicode(name_filter), na=False)
-                if parent_filter:
-                    mask &= df['पिता/माताको नाम_lower'].str.startswith(_normalize_unicode(parent_filter), na=False)
-                if spouse_filter:
-                    mask &= (df['पति/पत्नीको नाम'] != '-') & df['पति/पत्नीको नाम_lower'].str.startswith(_normalize_unicode(spouse_filter), na=False)
-                if gender_filter != "सबै":
-                    mask &= (df['लिङ्ग'] == gender_filter)
-                
-                age_ok = df['उमेर(वर्ष)'].notna()
-                age_in_range = (df['उमेर(वर्ष)'] >= min_age_filter) & (df['उमेर(वर्ष)'] <= max_age_filter)
-                mask &= age_ok & age_in_range
-                
-                filtered_df = df[mask]
-                st.markdown("---")
-                if not filtered_df.empty:
-                    if not use_print_view:
-                        st.success(f"✅ {len(filtered_df):,} मतदाता भेटियो")
-                    display_results(filtered_df, display_columns)
-                else:
-                    st.warning("⚠️ कुनै पनि मतदाता भेटिएन")
-        
-        elif search_option == "सबै डाटा हेर्नुहोस्":
-            st.subheader("📜 सम्पूर्ण मतदाता सूची")
+        if search_option == "सबै डाटा हेर्नुहोस्":
+            st.subheader("सम्पूर्ण मतदाता सूची")
             display_results(df, display_columns)
             if not use_print_view:
-                st.info(f"📊 कुल मतदाता संख्या: {len(df):,}")
+                st.info(f"कुल मतदाता संख्या: {len(df):,}")
         
         elif search_option == "मतदाताको नामबाट खोज्नुहोस्":
-            st.subheader("👤 मतदाताको नामबाट खोज्नुहोस्")
-            st.caption("🔤 उपसर्ग खोज / Prefix search")
+            st.subheader("मतदाताको नामबाट खोज्नुहोस्")
+            st.caption("🔤 Type in Nepali or English (Roman) / नेपाली वा अंग्रेजी मा टाइप गर्नुहोस्")
             with st.expander("📘 उदाहरण / Examples"):
-                st.markdown("**Example:** 'र' finds 'राम', 'रमेश', 'राधा'")
+                st.markdown("**Nepali:** 'र' finds 'राम', 'रमेश'")
+                st.markdown("**Roman:** 'ram' finds 'राम', 'रामेश'")
+                st.markdown("**Roman:** 'krishna' finds 'कृष्ण'")
             
-            search_name = st.text_input("मतदाताको नाम लेख्नुहोस्:", "", key="name_search")
+            search_name = st.text_input(
+                "मतदाताको नाम लेख्नुहोस् (Nepali or English):", 
+                "", 
+                key="name_search",
+                placeholder="e.g., राम or ram"
+            )
+            
             if search_name:
+                # Show conversion preview
+                show_conversion_preview(search_name, "name")
+                
                 filtered_df = unicode_prefix_search(df, 'मतदाताको नाम', search_name)
                 if not filtered_df.empty:
                     if not use_print_view:
                         st.success(f"✅ {len(filtered_df):,} मतदाता भेटियो")
                     display_results(filtered_df, display_columns)
                 else:
-                    st.warning("⚠️ कुनै पनि मतदाता भेटिएन")
+                    st.warning("कुनै पनि मतदाता भेटिएन")
         
         elif search_option == "मतदाता नंबरबाट खोज्नुहोस्":
-            st.subheader("🔢 मतदाता नंबरबाट खोज्नुहोस्")
+            st.subheader("मतदाता नंबरबाट खोज्नुहोस्")
             search_number = st.text_input("मतदाता नंबर लेख्नुहोस्:", "")
             if search_number:
                 try:
@@ -450,26 +347,40 @@ def main_app():
                         st.success("✅ मतदाता भेटियो")
                         display_results(filtered_df, display_columns)
                     else:
-                        st.warning("⚠️ कुनै पनि मतदाता भेटिएन")
+                        st.warning("कुनै पनि मतदाता भेटिएन")
                 except ValueError:
-                    st.error("❌ Invalid number format")
+                    st.error("Invalid number")
 
         elif search_option == "पिता/माताको नामबाट खोज्नुहोस्":
-            st.subheader("👨‍👩‍👦 पिता/माताको नामबाट खोज्नुहोस्")
-            search_parent = st.text_input("पिता वा माताको नाम:", "", key="parent_search")
+            st.subheader("पिता/माताको नामबाट खोज्नुहोस्")
+            st.caption("🔤 Type in Nepali or English (Roman)")
+            search_parent = st.text_input(
+                "पिता वा माताको नाम:", 
+                "", 
+                key="parent_search",
+                placeholder="e.g., हरि or hari"
+            )
             if search_parent:
+                show_conversion_preview(search_parent, "parent")
                 filtered_df = unicode_prefix_search(df, 'पिता/माताको नाम', search_parent)
                 if not filtered_df.empty:
                     if not use_print_view:
                         st.success(f"✅ {len(filtered_df):,} भेटियो")
                     display_results(filtered_df, display_columns)
                 else:
-                    st.warning("⚠️ भेटिएन")
+                    st.warning("भेटिएन")
 
         elif search_option == "पति/पत्नीको नामबाट खोज्नुहोस्":
-            st.subheader("💑 पति/पत्नीको नामबाट खोज्नुहोस्")
-            search_spouse = st.text_input("पति वा पत्नीको नाम:", "", key="spouse_search")
+            st.subheader("पति/पत्नीको नामबाट खोज्नुहोस्")
+            st.caption("🔤 Type in Nepali or English (Roman)")
+            search_spouse = st.text_input(
+                "पति वा पत्नीको नाम:", 
+                "", 
+                key="spouse_search",
+                placeholder="e.g., सीता or sita"
+            )
             if search_spouse:
+                show_conversion_preview(search_spouse, "spouse")
                 filtered_df = unicode_prefix_search(df, 'पति/पत्नीको नाम', search_spouse)
                 filtered_df = filtered_df[filtered_df['पति/पत्नीको नाम'] != '-']
                 if not filtered_df.empty:
@@ -477,10 +388,10 @@ def main_app():
                         st.success(f"✅ {len(filtered_df):,} भेटियो")
                     display_results(filtered_df, display_columns)
                 else:
-                    st.warning("⚠️ भेटिएन")
+                    st.warning("भेटिएन")
 
         elif search_option == "लिङ्गबाट फिल्टर गर्नुहोस्":
-            st.subheader("⚧️ लिङ्गबाट फिल्टर गर्नुहोस्")
+            st.subheader("लिङ्गबाट फिल्टर गर्नुहोस्")
             unique_genders = [g for g in df['लिङ्ग'].unique().tolist() if pd.notna(g)]
             gender_options = ["सबै"] + list(set(unique_genders + ["पुरुष", "महिला"]))
             selected_gender = st.selectbox("लिङ्ग छान्नुहोस्:", gender_options)
@@ -495,10 +406,10 @@ def main_app():
             display_results(filtered_df, display_columns)
 
         elif search_option == "उमेर दायराबाट खोज्नुहोस्":
-            st.subheader("📅 उमेर दायराबाट खोज्नुहोस्")
+            st.subheader("उमेर दायराबाट खोज्नुहोस्")
             c1, c2 = st.columns(2)
-            min_age = c1.number_input("न्यूनतम उमेर:", value=18)
-            max_age = c2.number_input("अधिकतम उमेर:", value=100)
+            min_age = c1.number_input("न्यूनतम:", value=18)
+            max_age = c2.number_input("अधिकतम:", value=100)
             
             age_ok = df['उमेर(वर्ष)'].notna()
             in_range = (df['उमेर(वर्ष)'] >= min_age) & (df['उमेर(वर्ष)'] <= max_age)
@@ -508,33 +419,97 @@ def main_app():
                 st.success(f"✅ {len(filtered_df):,} मतदाता भेटियो")
             display_results(filtered_df, display_columns)
 
+        elif search_option == "उन्नत खोज (सबै फिल्टर)":
+            st.subheader("🔍 उन्नत खोज")
+            st.caption("🔤 All name fields support Nepali or English (Roman) typing")
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                name_filter = st.text_input(
+                    "मतदाताको नाम:", 
+                    key="adv_name",
+                    placeholder="e.g., राम or ram"
+                )
+                parent_filter = st.text_input(
+                    "पिता/माताको नाम:", 
+                    key="adv_parent",
+                    placeholder="e.g., हरि or hari"
+                )
+                spouse_filter = st.text_input(
+                    "पति/पत्नीको नाम:", 
+                    key="adv_spouse",
+                    placeholder="e.g., सीता or sita"
+                )
+            with col2:
+                genders = ["सबै"] + list(set([g for g in df['लिङ्ग'].unique().tolist() if pd.notna(g)] + ["पुरुष", "महिला"]))
+                gender_filter = st.selectbox("लिङ्ग:", genders, key="adv_gender")
+                ac1, ac2 = st.columns(2)
+                min_age_filter = ac1.number_input("Min Age:", value=0, key="adv_min")
+                max_age_filter = ac2.number_input("Max Age:", value=150, key="adv_max")
+
+            # Show conversion previews for all name fields
+            if name_filter:
+                show_conversion_preview(name_filter, "adv_name")
+            if parent_filter:
+                show_conversion_preview(parent_filter, "adv_parent")
+            if spouse_filter:
+                show_conversion_preview(spouse_filter, "adv_spouse")
+
+            if st.button("🔍 खोज्नुहोस्", type="primary"):
+                mask = pd.Series([True] * len(df), index=df.index)
+                
+                if name_filter:
+                    converted_name = smart_convert(name_filter)
+                    mask &= df['मतदाताको नाम_lower'].str.startswith(_normalize_unicode(converted_name), na=False)
+                if parent_filter:
+                    converted_parent = smart_convert(parent_filter)
+                    mask &= df['पिता/माताको नाम_lower'].str.startswith(_normalize_unicode(converted_parent), na=False)
+                if spouse_filter:
+                    converted_spouse = smart_convert(spouse_filter)
+                    mask &= (df['पति/पत्नीको नाम'] != '-') & df['पति/पत्नीको नाम_lower'].str.startswith(_normalize_unicode(converted_spouse), na=False)
+                if gender_filter != "सबै":
+                    mask &= (df['लिङ्ग'] == gender_filter)
+                
+                age_ok = df['उमेर(वर्ष)'].notna()
+                age_in_range = (df['उमेर(वर्ष)'] >= min_age_filter) & (df['उमेर(वर्ष)'] <= max_age_filter)
+                mask &= age_ok & age_in_range
+                
+                filtered_df = df[mask]
+                st.markdown("---")
+                if not filtered_df.empty:
+                    if not use_print_view:
+                        st.success(f"✅ {len(filtered_df):,} मतदाता भेटियो")
+                    display_results(filtered_df, display_columns)
+                else:
+                    st.warning("कुनै पनि मतदाता भेटिएन")
+
+        # --- STATISTICS SECTION ---
         st.sidebar.markdown("---")
-        st.sidebar.subheader("📊 तथ्याङ्क / Statistics")
-        st.sidebar.metric("कुल मतदाता / Total", f"{len(df):,}")
+        st.sidebar.subheader("तथ्याङ्क")
+        st.sidebar.metric("कुल मतदाता", f"{len(df):,}")
         
         if 'उमेर(वर्ष)' in df.columns:
             genz_voters = df[(df['उमेर(वर्ष)'] >= 18) & (df['उमेर(वर्ष)'] <= 29)]
-            st.sidebar.metric("👥 युवा (18-29)", f"{len(genz_voters):,}")
+            st.sidebar.metric("Gen Z (18-29 वर्ष)", f"{len(genz_voters):,}")
         
         if 'लिङ्ग' in df.columns:
-            st.sidebar.write("**लिङ्ग अनुसार:**")
+            st.sidebar.write("लिङ्ग अनुसार:")
             gender_counts = df['लिङ्ग'].value_counts()
             for gender, count in gender_counts.items():
-                percentage = (count / len(df) * 100)
-                st.sidebar.write(f"• {gender}: {count:,} ({percentage:.1f}%)")
+                st.sidebar.write(f"- {gender}: {count:,}")
         
         if 'उमेर(वर्ष)' in df.columns:
             avg_age = df['उमेर(वर्ष)'].dropna().mean()
-            st.sidebar.metric("औसत उमेर / Avg Age", f"{avg_age:.1f} वर्ष" if not pd.isna(avg_age) else "—")
+            st.sidebar.metric("औसत उमेर", f"{avg_age:.1f} वर्ष" if not pd.isna(avg_age) else "—")
+        # ---------------------------------------------
 
     except FileNotFoundError:
-        st.error("❌ voterlist.xlsx not found. Please upload the file.")
+        st.error("voterlist.xlsx not found.")
     except Exception as e:
         logger.exception("App error")
-        st.error(f"❌ Error: {str(e)}")
+        st.error(f"Error: {str(e)}")
     
     st.markdown("---")
-    st.caption("© 2026 Voter List Search System • Secure & Efficient")
 
 if not st.session_state.logged_in:
     login_page()
