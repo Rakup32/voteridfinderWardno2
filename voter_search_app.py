@@ -211,10 +211,10 @@ def _build_modal_block(receipt_text, voter_num):
         '<!DOCTYPE html><html><head><meta charset="UTF-8">'
         '<style>'
         '@page{size:58mm auto;margin:5mm}'
-        'body{font-family:"Courier New",monospace;font-size:10pt;'
-        'line-height:1.4;width:58mm;margin:0 auto;padding:5mm}'
+        'body{font-family:"Courier New",monospace;font-size:11pt;'
+        'line-height:1.5;width:58mm;margin:0 auto;padding:5mm}'
         'pre{white-space:pre-wrap;word-wrap:break-word;'
-        'font-family:"Courier New",monospace;font-size:10pt;margin:0}'
+        'font-family:"Courier New",monospace;font-size:11pt;margin:0}'
         '</style></head><body><pre>' +
         receipt_text.replace('&','&amp;').replace('<','&lt;').replace('>','&gt;') +
         '</pre></body></html>'
@@ -244,8 +244,8 @@ def _build_modal_block(receipt_text, voter_num):
   justify-content:center;align-items:center;
 ">
   <div style="
-    background:#fff;border-radius:14px;width:90%;max-width:580px;
-    max-height:88vh;overflow-y:auto;box-shadow:0 30px 60px rgba(0,0,0,.4);
+    background:#fff;border-radius:14px;width:95%;max-width:720px;
+    max-height:92vh;overflow-y:auto;box-shadow:0 30px 60px rgba(0,0,0,.4);
     animation:slideDown .25s ease;
   ">
     <!-- header -->
@@ -265,8 +265,8 @@ def _build_modal_block(receipt_text, voter_num):
       <!-- receipt box -->
       <div style="
         background:#f7fafc;border:2px solid #e2e8f0;border-radius:8px;
-        padding:14px 16px;font-family:'Courier New',monospace;font-size:.82rem;
-        white-space:pre-wrap;line-height:1.45;max-height:340px;overflow-y:auto;
+        padding:18px 20px;font-family:'Courier New',monospace;font-size:1.1rem;
+        white-space:pre-wrap;line-height:1.6;max-height:500px;overflow-y:auto;
         margin-bottom:20px;
       ">{receipt_text}</div>
 
@@ -339,7 +339,7 @@ def _build_modal_block(receipt_text, voter_num):
   var printPage   = {print_page_js};
 
   function doPrint(){{
-    var w = window.open('','_blank','width=300,height=600');
+    var w = window.open('','_blank','width=400,height=700');
     w.document.write(printPage);
     w.document.close();
     w.focus();

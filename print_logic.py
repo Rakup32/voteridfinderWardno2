@@ -162,8 +162,22 @@ def create_print_preview(voter_data):
     """
     receipt_text = format_voter_receipt(voter_data)
     
-    # Display in a code block to preserve formatting
-    st.code(receipt_text, language=None)
+    # Display with custom styling for better visibility
+    st.markdown(f"""
+    <div style="
+        background: #f7fafc;
+        border: 2px solid #e2e8f0;
+        border-radius: 8px;
+        padding: 20px;
+        font-family: 'Courier New', monospace;
+        font-size: 14px;
+        line-height: 1.6;
+        white-space: pre-wrap;
+        overflow-x: auto;
+        max-height: 600px;
+        overflow-y: auto;
+    ">{receipt_text}</div>
+    """, unsafe_allow_html=True)
     
     return receipt_text
 
