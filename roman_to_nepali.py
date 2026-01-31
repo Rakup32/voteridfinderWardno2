@@ -239,7 +239,7 @@ COMMON_NAMES = {
     'tulasa': 'तुलसा', 'tulasaa': 'तुलसा',
     'uma': 'उमा', 'umaa': 'उमा',
     'usha': 'उषा', 'usaa': 'उषा',
-	'aakash': 'आकाश',
+    'aakash': 'आकाश',
     'aale': 'आले',
     'aarati': 'आरती',
     'aarti': 'आरती',
