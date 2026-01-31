@@ -6,7 +6,7 @@ import base64
 import time
 import extra_streamlit_components as stx
 from credentials import USERNAME, PASSWORD
-from print_logic import format_voter_receipt, show_print_dialog, create_print_preview
+from print_logic import format_voter_receipt
 
 def _normalize_unicode(s):
     """Normalize to NFC for consistent Unicode-aware Nepali character comparison."""
@@ -40,7 +40,7 @@ def get_base64_image(image_path):
 
 bell_image_base64 = get_base64_image("bell.png")
 
-# Enhanced Custom CSS with better styling
+# Enhanced Custom CSS
 st.markdown("""
     <style>
     .main { padding: 0.75rem 1rem; max-width: 100%; }
@@ -98,16 +98,6 @@ st.markdown("""
         border-left: 4px solid #38a169;
     }
     
-    /* Statistics Cards */
-    .stat-card {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        padding: 1rem;
-        border-radius: 8px;
-        color: white;
-        text-align: center;
-        margin: 0.5rem 0;
-    }
-    
     @media screen and (max-width: 768px) { 
         .main { padding: 0.5rem 0.75rem; } 
         h1 { font-size: 1.35rem !important; }
@@ -162,7 +152,7 @@ def login_page():
 
         if submit:
             if not USERNAME and not PASSWORD:
-                st.error("⚠️ Setup credentials in .env file")
+                st.error("⚠️ Setup credentials in .env file or Streamlit secrets")
             elif check_login(username, password):
                 st.session_state.logged_in = True
                 cookie_manager.set('voter_auth', 'true', expires_at=None, key="set_auth")
@@ -181,9 +171,7 @@ def logout():
     time.sleep(0.5)
     st.rerun()
 
-# --------------------------------
-
-# We keep standard columns to preserve order, but we will add new ones dynamically
+# We keep standard columns to preserve order
 STANDARD_COLUMNS = [
     'सि.नं.', 'मतदाता नं', 'मतदाताको नाम', 'उमेर(वर्ष)', 'लिङ्ग',
     'पति/पत्नीको नाम', 'पिता/माताको नाम'
@@ -200,8 +188,7 @@ def load_data():
     if 'उमेर(वर्ष)' in df.columns:
         df['उमेर(वर्ष)'] = pd.to_numeric(df['उमेर(वर्ष)'], errors='coerce')
 
-    # Create helper columns for search (ending in _lower)
-    # These will be hidden from the final view automatically
+    # Create helper columns for search
     if 'मतदाताको नाम' in df.columns:
         df['मतदाताको नाम_lower'] = df['मतदाताको नाम'].astype(str).map(lambda s: _normalize_unicode(s))
     if 'पिता/माताको नाम' in df.columns:
@@ -214,14 +201,9 @@ def load_data():
     return df
 
 def get_display_columns(df):
-    """
-    Returns ALL columns from the Excel file, excluding internal helper columns.
-    Preserves the order of STANDARD_COLUMNS first, then appends any new columns found.
-    """
-    # 1. Start with standard columns if they exist in the file
+    """Returns ALL columns from Excel, excluding helper columns."""
     final_cols = [c for c in STANDARD_COLUMNS if c in df.columns]
     
-    # 2. Add any columns NOT in standard list, NOT ending in _lower, NOT 'मतदाता विवरणहरू'
     for c in df.columns:
         if c not in STANDARD_COLUMNS and not c.endswith('_lower') and c not in final_cols and c != 'मतदाता विवरणहरू':
             final_cols.append(c)
@@ -235,7 +217,6 @@ def unicode_prefix_search(df, column, search_term):
     if not normalized:
         return df
     
-    # Check if helper column exists
     lower_col = column + "_lower"
     if lower_col not in df.columns:
         return df
@@ -243,249 +224,57 @@ def unicode_prefix_search(df, column, search_term):
     mask = df[lower_col].str.startswith(normalized, na=False)
     return df[mask]
 
-def _build_enhanced_modal_block(receipt_text, voter_num, voter_name):
-    """
-    Enhanced modal with better after-print experience
-    """
+def _build_direct_download_button(receipt_text, voter_num, voter_name):
+    """Simple button that directly downloads TXT for thermal printer."""
     import json
     receipt_js = json.dumps(receipt_text)
     voter_num_js = json.dumps(str(voter_num))
-    voter_name_js = json.dumps(str(voter_name))
-
-    # A printable HTML page that thermal printers can use
-    print_page = (
-        '<!DOCTYPE html><html><head><meta charset="UTF-8">'
-        '<title>Receipt - ' + str(voter_num) + '</title>'
-        '<style>'
-        '@page{size:58mm auto;margin:5mm}'
-        'body{font-family:"Courier New",monospace;font-size:11pt;'
-        'line-height:1.5;width:58mm;margin:0 auto;padding:5mm}'
-        'pre{white-space:pre-wrap;word-wrap:break-word;'
-        'font-family:"Courier New",monospace;font-size:11pt;margin:0}'
-        '</style></head><body><pre>' +
-        receipt_text.replace('&','&amp;').replace('<','&lt;').replace('>','&gt;') +
-        '</pre></body></html>'
-    )
-    print_page_js = json.dumps(print_page)
 
     return f"""
 <div style="width:100%;">
-
-<!-- ====== PRINT BUTTON (always visible) ====== -->
-<button id="openBtn"
-  onclick="openPrintModal()"
-  style="
+<button onclick="dlTXT()" style="
     width:100%;padding:16px 10px;border:none;border-radius:10px;cursor:pointer;
-    background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);
+    background:linear-gradient(135deg,#38b2ac 0%,#319795 100%);
     color:#fff;font-size:16px;font-weight:600;line-height:1.5;
-    transition:all .3s ease;
-    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
-  "
-  onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='0 8px 20px rgba(102,126,234,.5)'"
-  onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='0 4px 15px rgba(102,126,234,.3)'"
->
-  🖨️ मुद्रण गर्नुहोस्<br>
-  <span style="font-size:14px;opacity:.9;font-weight:500">(Print Receipt)</span>
+    transition:all .3s ease;box-shadow: 0 4px 15px rgba(56, 178, 172, 0.3);
+  " onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='0 8px 20px rgba(56,178,172,.5)'"
+  onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='0 4px 15px rgba(56,178,172,.3)'">
+  💾 थर्मल प्रिन्टरको लागि डाउनलोड गर्नुहोस्<br>
+  <span style="font-size:14px;opacity:.9;font-weight:500">(Download TXT for Thermal Printer)</span>
 </button>
 
-<!-- ====== MODAL OVERLAY (hidden until button clicked) ====== -->
-<div id="modalBg" style="
-  display:none;position:fixed;top:0;left:0;width:100%;height:100%;
-  background:rgba(0,0,0,.75);z-index:99999;
-  justify-content:center;align-items:center;
-  backdrop-filter: blur(4px);
-">
-  <div style="
-    background:#fff;border-radius:16px;width:95%;max-width:760px;
-    max-height:95vh;overflow-y:auto;box-shadow:0 25px 50px rgba(0,0,0,.5);
-    animation:modalSlideIn .3s ease;
-  ">
-    <!-- header -->
-    <div style="
-      background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);
-      color:#fff;padding:20px 24px;border-radius:16px 16px 0 0;
-    ">
-      <h2 style="margin:0;font-size:1.5rem;font-weight:700;">🖨️ मुद्रण पूर्वावलोकन</h2>
-      <p style="margin:8px 0 0;opacity:.9;font-size:.95rem;font-weight:500;">
-        मतदाता: {voter_name} &nbsp;•&nbsp; नं: {voter_num}
-      </p>
-      <p style="margin:4px 0 0;opacity:.75;font-size:.85rem;">
-        58mm Thermal Printer Format
-      </p>
-    </div>
-
-    <!-- body -->
-    <div style="padding:24px 24px 28px;">
-
-      <!-- receipt box -->
-      <div style="
-        background:#f8f9fa;border:2px solid #dee2e6;border-radius:10px;
-        padding:20px 22px;font-family:'Courier New',monospace;font-size:1.05rem;
-        white-space:pre-wrap;word-wrap:break-word;line-height:1.65;
-        overflow:visible;margin-bottom:24px;
-        box-shadow: inset 0 2px 4px rgba(0,0,0,.05);
-      ">{receipt_text}</div>
-
-      <!-- Success message after print (hidden initially) -->
-      <div id="printSuccess" style="
-        display:none;
-        background:linear-gradient(135deg,#48bb78 0%,#38a169 100%);
-        color:white;padding:16px;border-radius:10px;margin-bottom:20px;
-        text-align:center;font-weight:600;
-        animation:successFade .3s ease;
-      ">
-        ✅ प्रिन्ट सफल भयो! (Print Successful!)
-      </div>
-
-      <!-- 3 action buttons -->
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px;">
-
-        <!-- Browser Print -->
-        <button onclick="doPrint()" style="
-          background:linear-gradient(135deg,#38b2ac 0%,#319795 100%);
-          color:#fff;border:none;border-radius:10px;padding:16px 8px;
-          cursor:pointer;font-size:.9rem;font-weight:600;text-align:center;
-          transition:all .3s ease;
-          box-shadow: 0 4px 12px rgba(56,178,172,.3);
-        "
-          onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 16px rgba(56,178,172,.5)'"
-          onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='0 4px 12px rgba(56,178,172,.3)'"
-        >
-          🖨️<br>
-          <strong>Browser Print</strong><br>
-          <span style="font-size:.8rem;opacity:.85">Quick Print</span>
-        </button>
-
-        <!-- Download TXT -->
-        <button onclick="dlTXT()" style="
-          background:linear-gradient(135deg,#4299e1 0%,#3182ce 100%);
-          color:#fff;border:none;border-radius:10px;padding:16px 8px;
-          cursor:pointer;font-size:.9rem;font-weight:600;text-align:center;
-          transition:all .3s ease;
-          box-shadow: 0 4px 12px rgba(66,153,225,.3);
-        "
-          onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 16px rgba(66,153,225,.5)'"
-          onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='0 4px 12px rgba(66,153,225,.3)'"
-        >
-          💾<br>
-          <strong>Download TXT</strong><br>
-          <span style="font-size:.8rem;opacity:.85">For Thermal</span>
-        </button>
-
-        <!-- Download HTML -->
-        <button onclick="dlHTML()" style="
-          background:linear-gradient(135deg,#ed8936 0%,#dd6b20 100%);
-          color:#fff;border:none;border-radius:10px;padding:16px 8px;
-          cursor:pointer;font-size:.9rem;font-weight:600;text-align:center;
-          transition:all .3s ease;
-          box-shadow: 0 4px 12px rgba(237,137,54,.3);
-        "
-          onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 16px rgba(237,137,54,.5)'"
-          onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='0 4px 12px rgba(237,137,54,.3)'"
-        >
-          📄<br>
-          <strong>Download HTML</strong><br>
-          <span style="font-size:.8rem;opacity:.85">Best Quality</span>
-        </button>
-      </div>
-
-      <!-- Close button -->
-      <button onclick="closePrintModal()" style="
-        width:100%;padding:14px;border:none;border-radius:10px;cursor:pointer;
-        background:linear-gradient(135deg,#f56565 0%,#e53e3e 100%);
-        color:#fff;font-size:1rem;font-weight:600;
-        transition:all .3s ease;
-        box-shadow: 0 4px 12px rgba(245,101,101,.3);
-      "
-        onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 16px rgba(245,101,101,.5)'"
-        onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='0 4px 12px rgba(245,101,101,.3)'"
-      >
-        ❌ बन्द गर्नुहोस् (Close)
-      </button>
-    </div>
-  </div>
+<div id="successMsg_{voter_num}" style="
+    display:none;
+    background:linear-gradient(135deg,#48bb78 0%,#38a169 100%);
+    color:white;padding:12px;border-radius:8px;margin-top:10px;
+    text-align:center;font-weight:600;font-size:14px;
+    animation:successFade .3s ease;">
+    ✅ डाउनलोड सफल भयो! (Download Successful!)
 </div>
 
-<!-- ====== JavaScript ====== -->
 <script>
 (function(){{
-  var bg = document.getElementById('modalBg');
-  var successMsg = document.getElementById('printSuccess');
-  
-  // Click outside closes modal
-  bg.addEventListener('click', function(e){{
-    if(e.target === bg) closePrintModal();
-  }});
-
-  // ESC key closes modal
-  document.addEventListener('keydown', function(e){{
-    if(e.key === 'Escape') closePrintModal();
-  }});
-
   var receiptText = {receipt_js};
   var voterNum = {voter_num_js};
-  var voterName = {voter_name_js};
-  var printPage = {print_page_js};
-
-  window.openPrintModal = function() {{
-    bg.style.display = 'flex';
-    successMsg.style.display = 'none';
-  }}
-
-  window.closePrintModal = function() {{
-    bg.style.display = 'none';
-    setTimeout(function() {{
-      successMsg.style.display = 'none';
-    }}, 300);
-  }}
-
-  function showSuccess() {{
-    successMsg.style.display = 'block';
-    setTimeout(function() {{
-      successMsg.style.display = 'none';
-    }}, 3000);
-  }}
-
-  window.doPrint = function() {{
-    var w = window.open('','_blank','width=400,height=700');
-    if (w) {{
-      w.document.write(printPage);
-      w.document.close();
-      w.focus();
-      setTimeout(function() {{ 
-        w.print(); 
-        showSuccess();
-      }}, 400);
-    }} else {{
-      alert('Please allow popups to print');
-    }}
-  }}
+  var successMsg = document.getElementById('successMsg_' + voterNum);
 
   window.dlTXT = function() {{
     var b = new Blob([receiptText],{{type:'text/plain;charset=utf-8'}});
     var a = document.createElement('a');
     a.href = URL.createObjectURL(b);
-    a.download = 'voter_' + voterNum + '.txt';
+    a.download = 'voter_' + voterNum + '_thermal.txt';
     a.click();
-    showSuccess();
-  }}
-
-  window.dlHTML = function() {{
-    var b = new Blob([printPage],{{type:'text/html;charset=utf-8'}});
-    var a = document.createElement('a');
-    a.href = URL.createObjectURL(b);
-    a.download = 'voter_' + voterNum + '.html';
-    a.click();
-    showSuccess();
+    
+    // Show success message
+    successMsg.style.display = 'block';
+    setTimeout(function() {{
+      successMsg.style.display = 'none';
+    }}, 3000);
   }}
 }})();
 </script>
 
 <style>
-  @keyframes modalSlideIn {{
-    from {{ opacity:0; transform:translateY(-50px) scale(0.9); }}
-    to {{ opacity:1; transform:translateY(0) scale(1); }}
-  }}
   @keyframes successFade {{
     from {{ opacity:0; transform:scale(0.95); }}
     to {{ opacity:1; transform:scale(1); }}
@@ -494,17 +283,16 @@ def _build_enhanced_modal_block(receipt_text, voter_num, voter_name):
 </div>
 """
 
-
 def show_results_table_with_print(data, columns):
-    """Display results with enhanced print functionality."""
+    """Display results with direct download for thermal printer."""
     if data.empty:
         return
 
     st.markdown("""
     <div class="print-info-box">
-        <strong>🖨️ प्रिन्ट मोड सक्रिय छ / Print Mode Active</strong><br>
-        📋 प्रत्येक मतदातामा क्लिक गर्नुहोस् र Print बटन थिच्नुहोस्।<br>
-        💡 प्रत्येक रसिद तुरुन्त प्रिन्ट वा डाउनलोड गर्न सकिन्छ।
+        <strong>🖨️ थर्मल प्रिन्टर मोड / Thermal Printer Mode</strong><br>
+        📋 प्रत्येक मतदाताको TXT फाइल डाउनलोड गर्नुहोस्।<br>
+        💡 TXT फाइल सिधै थर्मल प्रिन्टरमा प्रिन्ट गर्न सकिन्छ।
     </div>
     """, unsafe_allow_html=True)
 
@@ -526,13 +314,10 @@ def show_results_table_with_print(data, columns):
                         st.text(f"{col}: {value}")
 
             with col2:
-                # Generate the receipt once
                 voter_dict = row.to_dict()
                 receipt_text = format_voter_receipt(voter_dict)
-
-                # Enhanced modal with better after-print experience
-                modal_html = _build_enhanced_modal_block(receipt_text, voter_num, voter_name)
-                st.components.v1.html(modal_html, height=90, scrolling=False)
+                download_button = _build_direct_download_button(receipt_text, voter_num, voter_name)
+                st.components.v1.html(download_button, height=120, scrolling=False)
 
 def show_results_table(data, columns):
     """Standard table display without print buttons."""
@@ -556,7 +341,6 @@ def main_app():
         with st.spinner('📂 डाटा लोड गर्दै... / Loading data...'):
             df = load_data()
 
-        # Get all valid display columns (Standard + Any New Columns)
         display_columns = get_display_columns(df)
         
         if not display_columns:
@@ -564,40 +348,77 @@ def main_app():
             return
 
         st.sidebar.header("🔍 खोज विकल्प")
-        
-        # Add display mode toggle
         st.sidebar.markdown("---")
         st.sidebar.subheader("📊 प्रदर्शन मोड / Display Mode")
+        
         display_mode = st.sidebar.radio(
             "मोड छान्नुहोस् / Select Mode:",
-            ["📋 Table View (तालिका)", "🖨️ Print View (प्रिन्ट)"],
+            ["📋 Table View (तालिका)", "🖨️ Print View (थर्मल प्रिन्टर)"],
             index=0,
-            help="Table View: सबै मतदाता एकै पटक हेर्नुहोस् | Print View: प्रत्येक मतदाता प्रिन्ट गर्न सकिन्छ"
+            help="Table View: सबै मतदाता एकै पटक हेर्नुहोस् | Print View: थर्मल प्रिन्टरको लागि TXT डाउनलोड गर्नुहोस्"
         )
-        use_print_view = (display_mode == "🖨️ Print View (प्रिन्ट)")
+        use_print_view = (display_mode == "🖨️ Print View (थर्मल प्रिन्टर)")
         
         if use_print_view:
-            st.sidebar.success("✅ **Print Mode Enabled**\n\nप्रत्येक मतदातामा Print बटन देखिनेछ।")
+            st.sidebar.success("✅ **Thermal Printer Mode**\n\nप्रत्येक मतदाताको TXT डाउनलोड बटन देखिनेछ।")
         
         st.sidebar.markdown("---")
         
+        # Set उन्नत खोज as default (index 0)
         default_index = 0
         search_option = st.sidebar.selectbox(
             "खोज प्रकार छान्नुहोस्:",
-            ["सबै डाटा हेर्नुहोस्", "मतदाताको नामबाट खोज्नुहोस्", "मतदाता नंबरबाट खोज्नुहोस्", 
+            ["उन्नत खोज (सबै फिल्टर)", "सबै डाटा हेर्नुहोस्", "मतदाताको नामबाट खोज्नुहोस्", "मतदाता नंबरबाट खोज्नुहोस्", 
              "पिता/माताको नामबाट खोज्नुहोस्", "पति/पत्नीको नामबाट खोज्नुहोस्",
-             "लिङ्गबाट फिल्टर गर्नुहोस्", "उमेर दायराबाट खोज्नुहोस्", "उन्नत खोज (सबै फिल्टर)"],
+             "लिङ्गबाट फिल्टर गर्नुहोस्", "उमेर दायराबाट खोज्नुहोस्"],
             index=default_index
         )
         
-        # Helper function to show results based on mode
         def display_results(filtered_df, display_cols):
             if use_print_view:
                 show_results_table_with_print(filtered_df, display_cols)
             else:
                 show_results_table(filtered_df, display_cols)
         
-        if search_option == "सबै डाटा हेर्नुहोस्":
+        if search_option == "उन्नत खोज (सबै फिल्टर)":
+            st.subheader("🔍 उन्नत खोज / Advanced Search")
+            col1, col2 = st.columns(2)
+            with col1:
+                name_filter = st.text_input("मतदाताको नाम:", key="adv_name")
+                parent_filter = st.text_input("पिता/माताको नाम:", key="adv_parent")
+                spouse_filter = st.text_input("पति/पत्नीको नाम:", key="adv_spouse")
+            with col2:
+                genders = ["सबै"] + list(set([g for g in df['लिङ्ग'].unique().tolist() if pd.notna(g)] + ["पुरुष", "महिला"]))
+                gender_filter = st.selectbox("लिङ्ग:", genders, key="adv_gender")
+                ac1, ac2 = st.columns(2)
+                min_age_filter = ac1.number_input("Min Age:", value=0, key="adv_min")
+                max_age_filter = ac2.number_input("Max Age:", value=150, key="adv_max")
+
+            if st.button("🔍 खोज्नुहोस् / Search", type="primary", use_container_width=True):
+                mask = pd.Series([True] * len(df), index=df.index)
+                if name_filter:
+                    mask &= df['मतदाताको नाम_lower'].str.startswith(_normalize_unicode(name_filter), na=False)
+                if parent_filter:
+                    mask &= df['पिता/माताको नाम_lower'].str.startswith(_normalize_unicode(parent_filter), na=False)
+                if spouse_filter:
+                    mask &= (df['पति/पत्नीको नाम'] != '-') & df['पति/पत्नीको नाम_lower'].str.startswith(_normalize_unicode(spouse_filter), na=False)
+                if gender_filter != "सबै":
+                    mask &= (df['लिङ्ग'] == gender_filter)
+                
+                age_ok = df['उमेर(वर्ष)'].notna()
+                age_in_range = (df['उमेर(वर्ष)'] >= min_age_filter) & (df['उमेर(वर्ष)'] <= max_age_filter)
+                mask &= age_ok & age_in_range
+                
+                filtered_df = df[mask]
+                st.markdown("---")
+                if not filtered_df.empty:
+                    if not use_print_view:
+                        st.success(f"✅ {len(filtered_df):,} मतदाता भेटियो")
+                    display_results(filtered_df, display_columns)
+                else:
+                    st.warning("⚠️ कुनै पनि मतदाता भेटिएन")
+        
+        elif search_option == "सबै डाटा हेर्नुहोस्":
             st.subheader("📜 सम्पूर्ण मतदाता सूची")
             display_results(df, display_columns)
             if not use_print_view:
@@ -687,45 +508,6 @@ def main_app():
                 st.success(f"✅ {len(filtered_df):,} मतदाता भेटियो")
             display_results(filtered_df, display_columns)
 
-        elif search_option == "उन्नत खोज (सबै फिल्टर)":
-            st.subheader("🔍 उन्नत खोज / Advanced Search")
-            col1, col2 = st.columns(2)
-            with col1:
-                name_filter = st.text_input("मतदाताको नाम:", key="adv_name")
-                parent_filter = st.text_input("पिता/माताको नाम:", key="adv_parent")
-                spouse_filter = st.text_input("पति/पत्नीको नाम:", key="adv_spouse")
-            with col2:
-                genders = ["सबै"] + list(set([g for g in df['लिङ्ग'].unique().tolist() if pd.notna(g)] + ["पुरुष", "महिला"]))
-                gender_filter = st.selectbox("लिङ्ग:", genders, key="adv_gender")
-                ac1, ac2 = st.columns(2)
-                min_age_filter = ac1.number_input("Min Age:", value=0, key="adv_min")
-                max_age_filter = ac2.number_input("Max Age:", value=150, key="adv_max")
-
-            if st.button("🔍 खोज्नुहोस् / Search", type="primary", use_container_width=True):
-                mask = pd.Series([True] * len(df), index=df.index)
-                if name_filter:
-                    mask &= df['मतदाताको नाम_lower'].str.startswith(_normalize_unicode(name_filter), na=False)
-                if parent_filter:
-                    mask &= df['पिता/माताको नाम_lower'].str.startswith(_normalize_unicode(parent_filter), na=False)
-                if spouse_filter:
-                    mask &= (df['पति/पत्नीको नाम'] != '-') & df['पति/पत्नीको नाम_lower'].str.startswith(_normalize_unicode(spouse_filter), na=False)
-                if gender_filter != "सबै":
-                    mask &= (df['लिङ्ग'] == gender_filter)
-                
-                age_ok = df['उमेर(वर्ष)'].notna()
-                age_in_range = (df['उमेर(वर्ष)'] >= min_age_filter) & (df['उमेर(वर्ष)'] <= max_age_filter)
-                mask &= age_ok & age_in_range
-                
-                filtered_df = df[mask]
-                st.markdown("---")
-                if not filtered_df.empty:
-                    if not use_print_view:
-                        st.success(f"✅ {len(filtered_df):,} मतदाता भेटियो")
-                    display_results(filtered_df, display_columns)
-                else:
-                    st.warning("⚠️ कुनै पनि मतदाता भेटिएन")
-
-        # --- STATISTICS SECTION ---
         st.sidebar.markdown("---")
         st.sidebar.subheader("📊 तथ्याङ्क / Statistics")
         st.sidebar.metric("कुल मतदाता / Total", f"{len(df):,}")
@@ -744,7 +526,6 @@ def main_app():
         if 'उमेर(वर्ष)' in df.columns:
             avg_age = df['उमेर(वर्ष)'].dropna().mean()
             st.sidebar.metric("औसत उमेर / Avg Age", f"{avg_age:.1f} वर्ष" if not pd.isna(avg_age) else "—")
-        # ---------------------------------------------
 
     except FileNotFoundError:
         st.error("❌ voterlist.xlsx not found. Please upload the file.")
