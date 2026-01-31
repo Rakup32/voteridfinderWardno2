@@ -4457,8 +4457,7 @@ COMMON_NAMES = {
     'deepaka kumara sah': 'दिपक कुमार साह',
     'deepaka kumara saha': 'दिपक कुमार साह',
     'deepaka kumara seelaval': 'दिपक कुमार सिलवाल',
-    'deepaka kumara seelavala': 'दिपक कुमा
-र सिलवाल',
+    'deepaka kumara seelavala': 'दिपक कुमार सिलवाल',
     'deepaka kumara shreshth': 'दिपक कुमार श्रेष्ठ',
     'deepaka kumara shreshtha': 'दिपक कुमार श्रेष्ठ',
     'deepaka kumara upretee': 'दीपक कुमार उप्रेती',
