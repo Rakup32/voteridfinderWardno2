@@ -10,7 +10,7 @@ from print_logic import format_voter_receipt, show_print_dialog, create_print_pr
 
 def _normalize_unicode(s):
     """Normalize to NFC for consistent Unicode-aware Nepali character comparison."""
-    if not isinstance(s, str) or not s:
+    if not isinstance(s, str) or not s:    streamlit run voter_search_app_improved.py
         return s
     return unicodedata.normalize("NFC", s.strip().lower())
 
@@ -40,7 +40,7 @@ def get_base64_image(image_path):
 
 bell_image_base64 = get_base64_image("bell.png")
 
-# Custom CSS
+# Enhanced Custom CSS with better styling
 st.markdown("""
     <style>
     .main { padding: 0.75rem 1rem; max-width: 100%; }
@@ -51,6 +51,8 @@ st.markdown("""
     .stButton > button { min-height: 44px !important; padding: 0.5rem 1rem !important; font-size: 1rem !important; }
     .stSelectbox > div { min-height: 44px !important; }
     [data-testid="stSidebar"] { min-width: 260px; }
+    
+    /* Login Page Styling */
     .login-wrapper { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 1rem 1rem 0.5rem; }
     .login-card { width: 100%; max-width: 560px; padding: 2rem 1.75rem 0; text-align: center; margin: 0 auto; display: flex; flex-direction: column; align-items: center; }
     .login-logo { width: 80px; height: 80px; margin: 0 auto 1rem; border-radius: 14px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.12); background: #f7fafc; animation: login-swing 2s ease-in-out infinite; }
@@ -64,10 +66,57 @@ st.markdown("""
     .login-footer { margin-top: 1.5rem; font-size: 0.75rem; color: #a0aec0; text-align: center; }
     .main .block-container > div:has(.login-wrapper) { margin-bottom: 0 !important; }
     .main [data-testid="stForm"] { max-width: 400px; margin-left: auto !important; margin-right: auto !important; }
-    .print-info-box { background: #e6fffa; border-left: 4px solid #38b2ac; padding: 1rem; margin: 0.5rem 0; border-radius: 4px; }
-    .voter-card { background: #f7fafc; border: 1px solid #e2e8f0; padding: 0.75rem; margin: 0.5rem 0; border-radius: 6px; }
-    @media screen and (max-width: 768px) { .main { padding: 0.5rem 0.75rem; } h1 { font-size: 1.35rem !important; } }
-    @media screen and (max-width: 480px) { .main { padding: 0.4rem 0.5rem; } h1 { font-size: 1.2rem !important; } }
+    
+    /* Print Info Box */
+    .print-info-box { 
+        background: linear-gradient(135deg, #e6fffa 0%, #b2f5ea 100%); 
+        border-left: 4px solid #38b2ac; 
+        padding: 1.25rem; 
+        margin: 1rem 0; 
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(56, 178, 172, 0.15);
+    }
+    .print-info-box strong { color: #234e52; font-size: 1.1rem; }
+    
+    /* Voter Card */
+    .voter-card { 
+        background: #f7fafc; 
+        border: 1px solid #e2e8f0; 
+        padding: 1rem; 
+        margin: 0.75rem 0; 
+        border-radius: 8px;
+        transition: all 0.3s ease;
+    }
+    .voter-card:hover {
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        transform: translateY(-2px);
+    }
+    
+    /* Success Message Enhancement */
+    .stSuccess { 
+        border-radius: 8px;
+        border-left: 4px solid #38a169;
+    }
+    
+    /* Statistics Cards */
+    .stat-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        padding: 1rem;
+        border-radius: 8px;
+        color: white;
+        text-align: center;
+        margin: 0.5rem 0;
+    }
+    
+    @media screen and (max-width: 768px) { 
+        .main { padding: 0.5rem 0.75rem; } 
+        h1 { font-size: 1.35rem !important; }
+        .print-info-box { padding: 1rem; }
+    }
+    @media screen and (max-width: 480px) { 
+        .main { padding: 0.4rem 0.5rem; } 
+        h1 { font-size: 1.2rem !important; }
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -113,18 +162,18 @@ def login_page():
 
         if submit:
             if not USERNAME and not PASSWORD:
-                st.error("Setup credentials in .env")
+                st.error("⚠️ Setup credentials in .env file")
             elif check_login(username, password):
                 st.session_state.logged_in = True
                 cookie_manager.set('voter_auth', 'true', expires_at=None, key="set_auth")
-                st.success("लगइन सफल भयो! (Login Success)")
+                st.success("✅ लगइन सफल भयो! (Login Success)")
                 st.balloons()
                 time.sleep(1)
                 st.rerun()
             else:
-                st.error("गलत प्रयोगकर्ता नाम वा पासवर्ड।")
+                st.error("❌ गलत प्रयोगकर्ता नाम वा पासवर्ड।")
 
-    st.markdown('<div class="login-footer">Official use only • Authorized personnel</div>', unsafe_allow_html=True)
+    st.markdown('<div class="login-footer">🔒 Official use only • Authorized personnel</div>', unsafe_allow_html=True)
 
 def logout():
     st.session_state.logged_in = False
@@ -172,9 +221,9 @@ def get_display_columns(df):
     # 1. Start with standard columns if they exist in the file
     final_cols = [c for c in STANDARD_COLUMNS if c in df.columns]
     
-    # 2. Add any columns NOT in standard list, NOT ending in _lower
+    # 2. Add any columns NOT in standard list, NOT ending in _lower, NOT 'मतदाता विवरणहरू'
     for c in df.columns:
-        if c not in STANDARD_COLUMNS and not c.endswith('_lower') and c not in final_cols:
+        if c not in STANDARD_COLUMNS and not c.endswith('_lower') and c not in final_cols and c != 'मतदाता विवरणहरू':
             final_cols.append(c)
             
     return final_cols
@@ -194,21 +243,19 @@ def unicode_prefix_search(df, column, search_term):
     mask = df[lower_col].str.startswith(normalized, na=False)
     return df[mask]
 
-def _build_modal_block(receipt_text, voter_num):
+def _build_enhanced_modal_block(receipt_text, voter_num, voter_name):
     """
-    Return a single HTML string that contains BOTH the print button AND
-    the modal popup.  Everything lives in one <div> so that when Streamlit
-    renders it via st.components.v1.html() it lands in ONE iframe and the
-    JavaScript onclick can reach the modal without any cross-iframe issues.
+    Enhanced modal with better after-print experience
     """
-    import json                          # safe escaping for JS string literals
-    receipt_js   = json.dumps(receipt_text)   # adds quotes + escapes everything
+    import json
+    receipt_js = json.dumps(receipt_text)
     voter_num_js = json.dumps(str(voter_num))
+    voter_name_js = json.dumps(str(voter_name))
 
     # A printable HTML page that thermal printers can use
-    # We embed it as a JS template string so window.open can write it
     print_page = (
         '<!DOCTYPE html><html><head><meta charset="UTF-8">'
+        '<title>Receipt - ' + str(voter_num) + '</title>'
         '<style>'
         '@page{size:58mm auto;margin:5mm}'
         'body{font-family:"Courier New",monospace;font-size:11pt;'
@@ -226,148 +273,222 @@ def _build_modal_block(receipt_text, voter_num):
 
 <!-- ====== PRINT BUTTON (always visible) ====== -->
 <button id="openBtn"
-  onclick="document.getElementById('modalBg').style.display='flex'"
+  onclick="openPrintModal()"
   style="
-    width:100%;padding:14px 8px;border:none;border-radius:8px;cursor:pointer;
-    background:linear-gradient(135deg,#667eea,#764ba2);
-    color:#fff;font-size:15px;font-weight:600;line-height:1.4;
-    transition:transform .2s,box-shadow .2s;
+    width:100%;padding:16px 10px;border:none;border-radius:10px;cursor:pointer;
+    background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);
+    color:#fff;font-size:16px;font-weight:600;line-height:1.5;
+    transition:all .3s ease;
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
   "
-  onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 16px rgba(102,126,234,.4)'"
-  onmouseout ="this.style.transform='translateY(0)' ;this.style.boxShadow='none'"
->🖨️ मुद्रण गर्नुहोस्<br><span style="font-size:13px;opacity:.85">(Print)</span></button>
+  onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='0 8px 20px rgba(102,126,234,.5)'"
+  onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='0 4px 15px rgba(102,126,234,.3)'"
+>
+  🖨️ मुद्रण गर्नुहोस्<br>
+  <span style="font-size:14px;opacity:.9;font-weight:500">(Print Receipt)</span>
+</button>
 
 <!-- ====== MODAL OVERLAY (hidden until button clicked) ====== -->
 <div id="modalBg" style="
   display:none;position:fixed;top:0;left:0;width:100%;height:100%;
-  background:rgba(0,0,0,.72);z-index:99999;
+  background:rgba(0,0,0,.75);z-index:99999;
   justify-content:center;align-items:center;
+  backdrop-filter: blur(4px);
 ">
   <div style="
-    background:#fff;border-radius:14px;width:95%;max-width:720px;
-    max-height:95vh;overflow-y:auto;box-shadow:0 30px 60px rgba(0,0,0,.4);
-    animation:slideDown .25s ease;
+    background:#fff;border-radius:16px;width:95%;max-width:760px;
+    max-height:95vh;overflow-y:auto;box-shadow:0 25px 50px rgba(0,0,0,.5);
+    animation:modalSlideIn .3s ease;
   ">
     <!-- header -->
     <div style="
-      background:linear-gradient(135deg,#667eea,#764ba2);
-      color:#fff;padding:18px 22px;border-radius:14px 14px 0 0;
+      background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);
+      color:#fff;padding:20px 24px;border-radius:16px 16px 0 0;
     ">
-      <h2 style="margin:0;font-size:1.35rem;">🖨️ मुद्रण पूर्वावलोकन / Print Preview</h2>
-      <p style="margin:6px 0 0;opacity:.85;font-size:.88rem;">
-        मतदाता नं: {voter_num} &nbsp;|&nbsp; 58mm Thermal Printer
+      <h2 style="margin:0;font-size:1.5rem;font-weight:700;">🖨️ मुद्रण पूर्वावलोकन</h2>
+      <p style="margin:8px 0 0;opacity:.9;font-size:.95rem;font-weight:500;">
+        मतदाता: {voter_name} &nbsp;•&nbsp; नं: {voter_num}
+      </p>
+      <p style="margin:4px 0 0;opacity:.75;font-size:.85rem;">
+        58mm Thermal Printer Format
       </p>
     </div>
 
     <!-- body -->
-    <div style="padding:20px 22px 24px;">
+    <div style="padding:24px 24px 28px;">
 
       <!-- receipt box -->
       <div style="
-        background:#f7fafc;border:2px solid #e2e8f0;border-radius:8px;
-        padding:18px 20px;font-family:'Courier New',monospace;font-size:1.1rem;
-        white-space:pre-wrap;word-wrap:break-word;line-height:1.6;
-        overflow:visible;margin-bottom:20px;
+        background:#f8f9fa;border:2px solid #dee2e6;border-radius:10px;
+        padding:20px 22px;font-family:'Courier New',monospace;font-size:1.05rem;
+        white-space:pre-wrap;word-wrap:break-word;line-height:1.65;
+        overflow:visible;margin-bottom:24px;
+        box-shadow: inset 0 2px 4px rgba(0,0,0,.05);
       ">{receipt_text}</div>
 
+      <!-- Success message after print (hidden initially) -->
+      <div id="printSuccess" style="
+        display:none;
+        background:linear-gradient(135deg,#48bb78 0%,#38a169 100%);
+        color:white;padding:16px;border-radius:10px;margin-bottom:20px;
+        text-align:center;font-weight:600;
+        animation:successFade .3s ease;
+      ">
+        ✅ प्रिन्ट सफल भयो! (Print Successful!)
+      </div>
+
       <!-- 3 action buttons -->
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px;">
 
         <!-- Browser Print -->
         <button onclick="doPrint()" style="
-          background:linear-gradient(135deg,#38b2ac,#319795);
-          color:#fff;border:none;border-radius:8px;padding:14px 6px;
-          cursor:pointer;font-size:.88rem;font-weight:600;text-align:center;
-          transition:transform .2s,box-shadow .2s;
+          background:linear-gradient(135deg,#38b2ac 0%,#319795 100%);
+          color:#fff;border:none;border-radius:10px;padding:16px 8px;
+          cursor:pointer;font-size:.9rem;font-weight:600;text-align:center;
+          transition:all .3s ease;
+          box-shadow: 0 4px 12px rgba(56,178,172,.3);
         "
-          onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 12px rgba(56,178,172,.35)'"
-          onmouseout ="this.style.transform='translateY(0)' ;this.style.boxShadow='none'"
-        >🖨️<br><strong>Browser Print</strong><br><span style="font-size:.78rem;opacity:.85">Instant!</span></button>
+          onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 16px rgba(56,178,172,.5)'"
+          onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='0 4px 12px rgba(56,178,172,.3)'"
+        >
+          🖨️<br>
+          <strong>Browser Print</strong><br>
+          <span style="font-size:.8rem;opacity:.85">Quick Print</span>
+        </button>
 
         <!-- Download TXT -->
         <button onclick="dlTXT()" style="
-          background:linear-gradient(135deg,#4299e1,#3182ce);
-          color:#fff;border:none;border-radius:8px;padding:14px 6px;
-          cursor:pointer;font-size:.88rem;font-weight:600;text-align:center;
-          transition:transform .2s,box-shadow .2s;
+          background:linear-gradient(135deg,#4299e1 0%,#3182ce 100%);
+          color:#fff;border:none;border-radius:10px;padding:16px 8px;
+          cursor:pointer;font-size:.9rem;font-weight:600;text-align:center;
+          transition:all .3s ease;
+          box-shadow: 0 4px 12px rgba(66,153,225,.3);
         "
-          onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 12px rgba(66,153,225,.35)'"
-          onmouseout ="this.style.transform='translateY(0)' ;this.style.boxShadow='none'"
-        >💾<br><strong>Download TXT</strong><br><span style="font-size:.78rem;opacity:.85">For thermal</span></button>
+          onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 16px rgba(66,153,225,.5)'"
+          onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='0 4px 12px rgba(66,153,225,.3)'"
+        >
+          💾<br>
+          <strong>Download TXT</strong><br>
+          <span style="font-size:.8rem;opacity:.85">For Thermal</span>
+        </button>
 
         <!-- Download HTML -->
         <button onclick="dlHTML()" style="
-          background:linear-gradient(135deg,#4299e1,#3182ce);
-          color:#fff;border:none;border-radius:8px;padding:14px 6px;
-          cursor:pointer;font-size:.88rem;font-weight:600;text-align:center;
-          transition:transform .2s,box-shadow .2s;
+          background:linear-gradient(135deg,#ed8936 0%,#dd6b20 100%);
+          color:#fff;border:none;border-radius:10px;padding:16px 8px;
+          cursor:pointer;font-size:.9rem;font-weight:600;text-align:center;
+          transition:all .3s ease;
+          box-shadow: 0 4px 12px rgba(237,137,54,.3);
         "
-          onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 12px rgba(66,153,225,.35)'"
-          onmouseout ="this.style.transform='translateY(0)' ;this.style.boxShadow='none'"
-        >📄<br><strong>Download HTML</strong><br><span style="font-size:.78rem;opacity:.85">Best format</span></button>
+          onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 16px rgba(237,137,54,.5)'"
+          onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='0 4px 12px rgba(237,137,54,.3)'"
+        >
+          📄<br>
+          <strong>Download HTML</strong><br>
+          <span style="font-size:.8rem;opacity:.85">Best Quality</span>
+        </button>
       </div>
 
       <!-- Close button -->
-      <button onclick="document.getElementById('modalBg').style.display='none'" style="
-        width:100%;padding:12px;border:none;border-radius:8px;cursor:pointer;
-        background:linear-gradient(135deg,#f56565,#e53e3e);
-        color:#fff;font-size:.95rem;font-weight:600;
-        transition:transform .2s,box-shadow .2s;
+      <button onclick="closePrintModal()" style="
+        width:100%;padding:14px;border:none;border-radius:10px;cursor:pointer;
+        background:linear-gradient(135deg,#f56565 0%,#e53e3e 100%);
+        color:#fff;font-size:1rem;font-weight:600;
+        transition:all .3s ease;
+        box-shadow: 0 4px 12px rgba(245,101,101,.3);
       "
-        onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 12px rgba(245,101,101,.35)'"
-        onmouseout ="this.style.transform='translateY(0)' ;this.style.boxShadow='none'"
-      >❌ बन्द गर्नुहोस् (Close)</button>
+        onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 16px rgba(245,101,101,.5)'"
+        onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='0 4px 12px rgba(245,101,101,.3)'"
+      >
+        ❌ बन्द गर्नुहोस् (Close)
+      </button>
     </div>
   </div>
 </div>
 
-<!-- ====== click-outside closes modal ====== -->
+<!-- ====== JavaScript ====== -->
 <script>
 (function(){{
   var bg = document.getElementById('modalBg');
+  var successMsg = document.getElementById('printSuccess');
+  
+  // Click outside closes modal
   bg.addEventListener('click', function(e){{
-    if(e.target === bg) bg.style.display = 'none';
+    if(e.target === bg) closePrintModal();
   }});
 
   // ESC key closes modal
   document.addEventListener('keydown', function(e){{
-    if(e.key === 'Escape') bg.style.display = 'none';
+    if(e.key === 'Escape') closePrintModal();
   }});
 
   var receiptText = {receipt_js};
-  var voterNum    = {voter_num_js};
-  var printPage   = {print_page_js};
+  var voterNum = {voter_num_js};
+  var voterName = {voter_name_js};
+  var printPage = {print_page_js};
 
-  function doPrint(){{
-    var w = window.open('','_blank','width=400,height=700');
-    w.document.write(printPage);
-    w.document.close();
-    w.focus();
-    setTimeout(function(){{ w.print(); w.close(); }}, 300);
+  window.openPrintModal = function() {{
+    bg.style.display = 'flex';
+    successMsg.style.display = 'none';
   }}
 
-  function dlTXT(){{
+  window.closePrintModal = function() {{
+    bg.style.display = 'none';
+    setTimeout(function() {{
+      successMsg.style.display = 'none';
+    }}, 300);
+  }}
+
+  function showSuccess() {{
+    successMsg.style.display = 'block';
+    setTimeout(function() {{
+      successMsg.style.display = 'none';
+    }}, 3000);
+  }}
+
+  window.doPrint = function() {{
+    var w = window.open('','_blank','width=400,height=700');
+    if (w) {{
+      w.document.write(printPage);
+      w.document.close();
+      w.focus();
+      setTimeout(function() {{ 
+        w.print(); 
+        showSuccess();
+      }}, 400);
+    }} else {{
+      alert('Please allow popups to print');
+    }}
+  }}
+
+  window.dlTXT = function() {{
     var b = new Blob([receiptText],{{type:'text/plain;charset=utf-8'}});
     var a = document.createElement('a');
     a.href = URL.createObjectURL(b);
     a.download = 'voter_' + voterNum + '.txt';
     a.click();
+    showSuccess();
   }}
 
-  function dlHTML(){{
+  window.dlHTML = function() {{
     var b = new Blob([printPage],{{type:'text/html;charset=utf-8'}});
     var a = document.createElement('a');
     a.href = URL.createObjectURL(b);
     a.download = 'voter_' + voterNum + '.html';
     a.click();
+    showSuccess();
   }}
 }})();
 </script>
 
 <style>
-  @keyframes slideDown{{
-    from{{ opacity:0; transform:translateY(-40px); }}
-    to  {{ opacity:1; transform:translateY(0);     }}
+  @keyframes modalSlideIn {{
+    from {{ opacity:0; transform:translateY(-50px) scale(0.9); }}
+    to {{ opacity:1; transform:translateY(0) scale(1); }}
+  }}
+  @keyframes successFade {{
+    from {{ opacity:0; transform:scale(0.95); }}
+    to {{ opacity:1; transform:scale(1); }}
   }}
 </style>
 </div>
@@ -375,7 +496,7 @@ def _build_modal_block(receipt_text, voter_num):
 
 
 def show_results_table_with_print(data, columns):
-    """Display results with a JS-modal print popup — zero page reload."""
+    """Display results with enhanced print functionality."""
     if data.empty:
         return
 
@@ -383,7 +504,7 @@ def show_results_table_with_print(data, columns):
     <div class="print-info-box">
         <strong>🖨️ प्रिन्ट मोड सक्रिय छ / Print Mode Active</strong><br>
         📋 प्रत्येक मतदातामा क्लिक गर्नुहोस् र Print बटन थिच्नुहोस्।<br>
-        💡 पॉपআপ खुल्छ — पेज रिलोड हुन्छन् नैन।
+        💡 प्रत्येक रसिद तुरुन्त प्रिन्ट वा डाउनलोड गर्न सकिन्छ।
     </div>
     """, unsafe_allow_html=True)
 
@@ -391,25 +512,27 @@ def show_results_table_with_print(data, columns):
 
     for idx, row in data.iterrows():
         voter_name = row.get('मतदाताको नाम', 'N/A')
-        voter_num  = row.get('मतदाता नं',    'N/A')
+        voter_num = row.get('मतदाता नं', 'N/A')
+        age = row.get('उमेर(वर्ष)', 'N/A')
+        gender = row.get('लिङ्ग', 'N/A')
 
-        with st.expander(f"🗳️ {voter_name} — मतदाता नं: {voter_num}", expanded=False):
+        with st.expander(f"🗳️ {voter_name} — नं: {voter_num} | {gender}, {age} वर्ष", expanded=False):
             col1, col2 = st.columns([3, 1])
 
             with col1:
                 for col in columns:
-                    if col in row.index and col != 'मतदाता विवरणहरू':
+                    if col in row.index:
                         value = row[col] if pd.notna(row[col]) else '-'
                         st.text(f"{col}: {value}")
 
             with col2:
                 # Generate the receipt once
-                voter_dict   = row.to_dict()
+                voter_dict = row.to_dict()
                 receipt_text = format_voter_receipt(voter_dict)
 
-                # Single HTML block: button + modal in one iframe
-                modal_html = _build_modal_block(receipt_text, voter_num)
-                st.components.v1.html(modal_html, height=80, scrolling=False)
+                # Enhanced modal with better after-print experience
+                modal_html = _build_enhanced_modal_block(receipt_text, voter_num, voter_name)
+                st.components.v1.html(modal_html, height=90, scrolling=False)
 
 def show_results_table(data, columns):
     """Standard table display without print buttons."""
@@ -430,21 +553,21 @@ def main_app():
     st.markdown("---")
     
     try:
-        with st.spinner('डाटा लोड गर्दै... / Loading data...'):
+        with st.spinner('📂 डाटा लोड गर्दै... / Loading data...'):
             df = load_data()
 
         # Get all valid display columns (Standard + Any New Columns)
         display_columns = get_display_columns(df)
         
         if not display_columns:
-            st.error("Excel columns missing.")
+            st.error("❌ Excel columns missing.")
             return
 
-        st.sidebar.header("खोज विकल्प")
+        st.sidebar.header("🔍 खोज विकल्प")
         
         # Add display mode toggle
         st.sidebar.markdown("---")
-        st.sidebar.subheader("प्रदर्शन मोड / Display Mode")
+        st.sidebar.subheader("📊 प्रदर्शन मोड / Display Mode")
         display_mode = st.sidebar.radio(
             "मोड छान्नुहोस् / Select Mode:",
             ["📋 Table View (तालिका)", "🖨️ Print View (प्रिन्ट)"],
@@ -454,11 +577,11 @@ def main_app():
         use_print_view = (display_mode == "🖨️ Print View (प्रिन्ट)")
         
         if use_print_view:
-            st.sidebar.info("🖨️ **Print Mode Active**\n\nप्रत्येक मतदातामा Print बटन देखिनेछ।\nEach voter will have a Print button.")
+            st.sidebar.success("✅ **Print Mode Enabled**\n\nप्रत्येक मतदातामा Print बटन देखिनेछ।")
         
         st.sidebar.markdown("---")
         
-        default_index = 7
+        default_index = 0
         search_option = st.sidebar.selectbox(
             "खोज प्रकार छान्नुहोस्:",
             ["सबै डाटा हेर्नुहोस्", "मतदाताको नामबाट खोज्नुहोस्", "मतदाता नंबरबाट खोज्नुहोस्", 
@@ -475,16 +598,16 @@ def main_app():
                 show_results_table(filtered_df, display_cols)
         
         if search_option == "सबै डाटा हेर्नुहोस्":
-            st.subheader("सम्पूर्ण मतदाता सूची")
+            st.subheader("📜 सम्पूर्ण मतदाता सूची")
             display_results(df, display_columns)
             if not use_print_view:
-                st.info(f"कुल मतदाता संख्या: {len(df):,}")
+                st.info(f"📊 कुल मतदाता संख्या: {len(df):,}")
         
         elif search_option == "मतदाताको नामबाट खोज्नुहोस्":
-            st.subheader("मतदाताको नामबाट खोज्नुहोस्")
+            st.subheader("👤 मतदाताको नामबाट खोज्नुहोस्")
             st.caption("🔤 उपसर्ग खोज / Prefix search")
             with st.expander("📘 उदाहरण / Examples"):
-                st.markdown("**Example:** 'र' finds 'राम', 'रमेश'")
+                st.markdown("**Example:** 'र' finds 'राम', 'रमेश', 'राधा'")
             
             search_name = st.text_input("मतदाताको नाम लेख्नुहोस्:", "", key="name_search")
             if search_name:
@@ -494,10 +617,10 @@ def main_app():
                         st.success(f"✅ {len(filtered_df):,} मतदाता भेटियो")
                     display_results(filtered_df, display_columns)
                 else:
-                    st.warning("कुनै पनि मतदाता भेटिएन")
+                    st.warning("⚠️ कुनै पनि मतदाता भेटिएन")
         
         elif search_option == "मतदाता नंबरबाट खोज्नुहोस्":
-            st.subheader("मतदाता नंबरबाट खोज्नुहोस्")
+            st.subheader("🔢 मतदाता नंबरबाट खोज्नुहोस्")
             search_number = st.text_input("मतदाता नंबर लेख्नुहोस्:", "")
             if search_number:
                 try:
@@ -506,12 +629,12 @@ def main_app():
                         st.success("✅ मतदाता भेटियो")
                         display_results(filtered_df, display_columns)
                     else:
-                        st.warning("कुनै पनि मतदाता भेटिएन")
+                        st.warning("⚠️ कुनै पनि मतदाता भेटिएन")
                 except ValueError:
-                    st.error("Invalid number")
+                    st.error("❌ Invalid number format")
 
         elif search_option == "पिता/माताको नामबाट खोज्नुहोस्":
-            st.subheader("पिता/माताको नामबाट खोज्नुहोस्")
+            st.subheader("👨‍👩‍👦 पिता/माताको नामबाट खोज्नुहोस्")
             search_parent = st.text_input("पिता वा माताको नाम:", "", key="parent_search")
             if search_parent:
                 filtered_df = unicode_prefix_search(df, 'पिता/माताको नाम', search_parent)
@@ -520,10 +643,10 @@ def main_app():
                         st.success(f"✅ {len(filtered_df):,} भेटियो")
                     display_results(filtered_df, display_columns)
                 else:
-                    st.warning("भेटिएन")
+                    st.warning("⚠️ भेटिएन")
 
         elif search_option == "पति/पत्नीको नामबाट खोज्नुहोस्":
-            st.subheader("पति/पत्नीको नामबाट खोज्नुहोस्")
+            st.subheader("💑 पति/पत्नीको नामबाट खोज्नुहोस्")
             search_spouse = st.text_input("पति वा पत्नीको नाम:", "", key="spouse_search")
             if search_spouse:
                 filtered_df = unicode_prefix_search(df, 'पति/पत्नीको नाम', search_spouse)
@@ -533,10 +656,10 @@ def main_app():
                         st.success(f"✅ {len(filtered_df):,} भेटियो")
                     display_results(filtered_df, display_columns)
                 else:
-                    st.warning("भेटिएन")
+                    st.warning("⚠️ भेटिएन")
 
         elif search_option == "लिङ्गबाट फिल्टर गर्नुहोस्":
-            st.subheader("लिङ्गबाट फिल्टर गर्नुहोस्")
+            st.subheader("⚧️ लिङ्गबाट फिल्टर गर्नुहोस्")
             unique_genders = [g for g in df['लिङ्ग'].unique().tolist() if pd.notna(g)]
             gender_options = ["सबै"] + list(set(unique_genders + ["पुरुष", "महिला"]))
             selected_gender = st.selectbox("लिङ्ग छान्नुहोस्:", gender_options)
@@ -551,10 +674,10 @@ def main_app():
             display_results(filtered_df, display_columns)
 
         elif search_option == "उमेर दायराबाट खोज्नुहोस्":
-            st.subheader("उमेर दायराबाट खोज्नुहोस्")
+            st.subheader("📅 उमेर दायराबाट खोज्नुहोस्")
             c1, c2 = st.columns(2)
-            min_age = c1.number_input("न्यूनतम:", value=18)
-            max_age = c2.number_input("अधिकतम:", value=100)
+            min_age = c1.number_input("न्यूनतम उमेर:", value=18)
+            max_age = c2.number_input("अधिकतम उमेर:", value=100)
             
             age_ok = df['उमेर(वर्ष)'].notna()
             in_range = (df['उमेर(वर्ष)'] >= min_age) & (df['उमेर(वर्ष)'] <= max_age)
@@ -565,7 +688,7 @@ def main_app():
             display_results(filtered_df, display_columns)
 
         elif search_option == "उन्नत खोज (सबै फिल्टर)":
-            st.subheader("🔍 उन्नत खोज")
+            st.subheader("🔍 उन्नत खोज / Advanced Search")
             col1, col2 = st.columns(2)
             with col1:
                 name_filter = st.text_input("मतदाताको नाम:", key="adv_name")
@@ -578,7 +701,7 @@ def main_app():
                 min_age_filter = ac1.number_input("Min Age:", value=0, key="adv_min")
                 max_age_filter = ac2.number_input("Max Age:", value=150, key="adv_max")
 
-            if st.button("🔍 खोज्नुहोस्", type="primary"):
+            if st.button("🔍 खोज्नुहोस् / Search", type="primary", use_container_width=True):
                 mask = pd.Series([True] * len(df), index=df.index)
                 if name_filter:
                     mask &= df['मतदाताको नाम_lower'].str.startswith(_normalize_unicode(name_filter), na=False)
@@ -600,37 +723,40 @@ def main_app():
                         st.success(f"✅ {len(filtered_df):,} मतदाता भेटियो")
                     display_results(filtered_df, display_columns)
                 else:
-                    st.warning("कुनै पनि मतदाता भेटिएन")
+                    st.warning("⚠️ कुनै पनि मतदाता भेटिएन")
 
         # --- STATISTICS SECTION ---
         st.sidebar.markdown("---")
-        st.sidebar.subheader("तथ्याङ्क")
-        st.sidebar.metric("कुल मतदाता", f"{len(df):,}")
+        st.sidebar.subheader("📊 तथ्याङ्क / Statistics")
+        st.sidebar.metric("कुल मतदाता / Total", f"{len(df):,}")
         
         if 'उमेर(वर्ष)' in df.columns:
             genz_voters = df[(df['उमेर(वर्ष)'] >= 18) & (df['उमेर(वर्ष)'] <= 29)]
-            st.sidebar.metric("Gen Z (18-29 वर्ष)", f"{len(genz_voters):,}")
+            st.sidebar.metric("👥 युवा (18-29)", f"{len(genz_voters):,}")
         
         if 'लिङ्ग' in df.columns:
-            st.sidebar.write("लिङ्ग अनुसार:")
+            st.sidebar.write("**लिङ्ग अनुसार:**")
             gender_counts = df['लिङ्ग'].value_counts()
             for gender, count in gender_counts.items():
-                st.sidebar.write(f"- {gender}: {count:,}")
+                percentage = (count / len(df) * 100)
+                st.sidebar.write(f"• {gender}: {count:,} ({percentage:.1f}%)")
         
         if 'उमेर(वर्ष)' in df.columns:
             avg_age = df['उमेर(वर्ष)'].dropna().mean()
-            st.sidebar.metric("औसत उमेर", f"{avg_age:.1f} वर्ष" if not pd.isna(avg_age) else "—")
+            st.sidebar.metric("औसत उमेर / Avg Age", f"{avg_age:.1f} वर्ष" if not pd.isna(avg_age) else "—")
         # ---------------------------------------------
 
     except FileNotFoundError:
-        st.error("voterlist.xlsx not found.")
+        st.error("❌ voterlist.xlsx not found. Please upload the file.")
     except Exception as e:
         logger.exception("App error")
-        st.error(f"Error: {str(e)}")
+        st.error(f"❌ Error: {str(e)}")
     
     st.markdown("---")
+    st.caption("© 2026 Voter List Search System • Secure & Efficient")
 
 if not st.session_state.logged_in:
     login_page()
 else:
     main_app()
+
