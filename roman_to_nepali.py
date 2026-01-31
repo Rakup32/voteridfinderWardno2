@@ -12334,8 +12334,7 @@ COMMON_NAMES = {
     'nanda lala paudel': 'नन्द लाल पौडेल',
     'nanda lala paudela': 'नन्द लाल पौडेल',
     'nanda rama deela devee': 'नन्द राम डिला देवी',
-    'nanda rama dil
-a debi': 'नन्द राम डिला देवी',
+    'nanda rama dila debi': 'नन्द राम डिला देवी',
     'nanda rama dila devi': 'नन्द राम डिला देवी',
     'nanda rama gmga debi': 'नन्द राम गंगा देवी',
     'nanda rama gmga devee': 'नन्द राम गंगा देवी',
