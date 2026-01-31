@@ -7,7 +7,7 @@ import time
 import extra_streamlit_components as stx
 from credentials import USERNAME, PASSWORD
 from print_logic import format_voter_receipt, show_print_dialog, create_print_preview
-from roman_to_nepali_improved import smart_convert, is_devanagari
+from roman_to_nepali import smart_convert, is_devanagari
 
 def _normalize_unicode(s):
     """Normalize to NFC for consistent Unicode-aware Nepali character comparison."""
