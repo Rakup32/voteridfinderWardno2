@@ -38005,7 +38005,7 @@ COMMON_NAMES = {
     "vibha": "विभा",
     "samjnana": "सम्झना",
     "tanka": "टंक",
-    "tank": "टंक"
+    "tank": "टंक",
     
     # Surnames - Comprehensive List
     'aale': 'आले', 'ale': 'आले',
