@@ -6,7 +6,7 @@ import base64
 import time
 import extra_streamlit_components as stx
 from credentials import USERNAME, PASSWORD
-from print_logic import format_voter_receipt, show_print_dialog, create_print_preview
+from print_logic import format_voter_receipt
 
 def _normalize_unicode(s):
     """Normalize to NFC for consistent Unicode-aware Nepali character comparison."""
@@ -40,7 +40,7 @@ def get_base64_image(image_path):
 
 bell_image_base64 = get_base64_image("bell.png")
 
-# Custom CSS
+# Custom CSS with Modal Styles
 st.markdown("""
     <style>
     .main { padding: 0.75rem 1rem; max-width: 100%; }
@@ -65,9 +65,150 @@ st.markdown("""
     .main .block-container > div:has(.login-wrapper) { margin-bottom: 0 !important; }
     .main [data-testid="stForm"] { max-width: 400px; margin-left: auto !important; margin-right: auto !important; }
     .print-info-box { background: #e6fffa; border-left: 4px solid #38b2ac; padding: 1rem; margin: 0.5rem 0; border-radius: 4px; }
-    .voter-card { background: #f7fafc; border: 1px solid #e2e8f0; padding: 0.75rem; margin: 0.5rem 0; border-radius: 6px; }
-    @media screen and (max-width: 768px) { .main { padding: 0.5rem 0.75rem; } h1 { font-size: 1.35rem !important; } }
-    @media screen and (max-width: 480px) { .main { padding: 0.4rem 0.5rem; } h1 { font-size: 1.2rem !important; } }
+    
+    /* Modal Styles */
+    .modal-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.75);
+        z-index: 9999;
+        animation: fadeIn 0.3s;
+    }
+    
+    .modal-overlay.active {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    .modal-container {
+        background: white;
+        border-radius: 12px;
+        max-width: 600px;
+        width: 90%;
+        max-height: 90vh;
+        overflow: hidden;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        animation: slideIn 0.3s;
+    }
+    
+    .modal-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 1.5rem;
+        border-radius: 12px 12px 0 0;
+    }
+    
+    .modal-header h2 {
+        margin: 0;
+        font-size: 1.5rem;
+        color: white;
+    }
+    
+    .modal-body {
+        padding: 1.5rem;
+        max-height: 60vh;
+        overflow-y: auto;
+    }
+    
+    .receipt-preview {
+        background: #f7fafc;
+        border: 2px solid #e2e8f0;
+        border-radius: 8px;
+        padding: 1rem;
+        font-family: 'Courier New', monospace;
+        font-size: 0.85rem;
+        white-space: pre-wrap;
+        line-height: 1.4;
+        margin-bottom: 1.5rem;
+        max-height: 400px;
+        overflow-y: auto;
+    }
+    
+    .button-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 1rem;
+        margin-bottom: 1rem;
+    }
+    
+    .modal-button {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        padding: 1rem;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 0.95rem;
+        font-weight: 600;
+        transition: all 0.3s;
+        text-align: center;
+    }
+    
+    .modal-button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+    }
+    
+    .modal-button.primary {
+        background: linear-gradient(135deg, #38b2ac 0%, #319795 100%);
+    }
+    
+    .modal-button.secondary {
+        background: linear-gradient(135deg, #4299e1 0%, #3182ce 100%);
+    }
+    
+    .modal-button.danger {
+        background: linear-gradient(135deg, #f56565 0%, #e53e3e 100%);
+    }
+    
+    .modal-button .icon {
+        display: block;
+        font-size: 1.5rem;
+        margin-bottom: 0.5rem;
+    }
+    
+    .modal-button .label {
+        display: block;
+        font-size: 0.85rem;
+        opacity: 0.9;
+    }
+    
+    .close-button {
+        width: 100%;
+        margin-top: 1rem;
+    }
+    
+    @keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+    }
+    
+    @keyframes slideIn {
+        from { 
+            opacity: 0;
+            transform: translateY(-50px);
+        }
+        to { 
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+    
+    @media screen and (max-width: 768px) { 
+        .main { padding: 0.5rem 0.75rem; } 
+        h1 { font-size: 1.35rem !important; }
+        .modal-container { width: 95%; }
+        .button-grid { grid-template-columns: 1fr; }
+    }
+    @media screen and (max-width: 480px) { 
+        .main { padding: 0.4rem 0.5rem; } 
+        h1 { font-size: 1.2rem !important; } 
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -152,7 +293,6 @@ def load_data():
         df['उमेर(वर्ष)'] = pd.to_numeric(df['उमेर(वर्ष)'], errors='coerce')
 
     # Create helper columns for search (ending in _lower)
-    # These will be hidden from the final view automatically
     if 'मतदाताको नाम' in df.columns:
         df['मतदाताको नाम_lower'] = df['मतदाताको नाम'].astype(str).map(lambda s: _normalize_unicode(s))
     if 'पिता/माताको नाम' in df.columns:
@@ -167,16 +307,11 @@ def load_data():
 def get_display_columns(df):
     """
     Returns ALL columns from the Excel file, excluding internal helper columns.
-    Preserves the order of STANDARD_COLUMNS first, then appends any new columns found.
     """
-    # 1. Start with standard columns if they exist in the file
     final_cols = [c for c in STANDARD_COLUMNS if c in df.columns]
-    
-    # 2. Add any columns NOT in standard list, NOT ending in _lower
     for c in df.columns:
         if c not in STANDARD_COLUMNS and not c.endswith('_lower') and c not in final_cols:
             final_cols.append(c)
-            
     return final_cols
 
 def unicode_prefix_search(df, column, search_term):
@@ -185,171 +320,190 @@ def unicode_prefix_search(df, column, search_term):
     normalized = _normalize_unicode(search_term)
     if not normalized:
         return df
-    
-    # Check if helper column exists
     lower_col = column + "_lower"
     if lower_col not in df.columns:
         return df
-        
     mask = df[lower_col].str.startswith(normalized, na=False)
     return df[mask]
 
+def create_print_modal_html(receipt_text, voter_num):
+    """Create HTML for print modal with JavaScript"""
+    
+    # Escape the receipt text for JavaScript
+    receipt_escaped = receipt_text.replace('\\', '\\\\').replace("'", "\\'").replace('\n', '\\n')
+    
+    # Create HTML version of receipt
+    receipt_html = f"""
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <style>
+            body {{ font-family: 'Courier New', monospace; white-space: pre; padding: 20px; }}
+        </style>
+    </head>
+    <body>{receipt_text}</body>
+    </html>
+    """
+    receipt_html_escaped = receipt_html.replace('\\', '\\\\').replace("'", "\\'").replace('\n', '\\n')
+    
+    modal_html = f"""
+    <div id="printModal" class="modal-overlay">
+        <div class="modal-container">
+            <div class="modal-header">
+                <h2>🖨️ मुद्रण पूर्वावलोकन / Print Preview</h2>
+                <p style="margin: 0.5rem 0 0 0; opacity: 0.9; font-size: 0.9rem;">
+                    मतदाता नं: {voter_num} | 58mm Thermal Printer Format
+                </p>
+            </div>
+            <div class="modal-body">
+                <div class="receipt-preview" id="receiptContent">{receipt_text}</div>
+                
+                <div class="button-grid">
+                    <button class="modal-button primary" onclick="printReceipt()">
+                        <span class="icon">🖨️</span>
+                        <strong>Browser Print</strong>
+                        <span class="label">Instant print</span>
+                    </button>
+                    
+                    <button class="modal-button secondary" onclick="downloadTXT()">
+                        <span class="icon">💾</span>
+                        <strong>Download TXT</strong>
+                        <span class="label">For thermal printer</span>
+                    </button>
+                    
+                    <button class="modal-button secondary" onclick="downloadHTML()">
+                        <span class="icon">📄</span>
+                        <strong>Download HTML</strong>
+                        <span class="label">Best format</span>
+                    </button>
+                </div>
+                
+                <button class="modal-button danger close-button" onclick="closeModal()">
+                    ❌ बन्द गर्नुहोस् (Close)
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const receiptText = '{receipt_escaped}';
+        const receiptHTML = '{receipt_html_escaped}';
+        const voterNum = '{voter_num}';
+        
+        function printReceipt() {{
+            const printWindow = window.open('', '_blank');
+            printWindow.document.write(receiptHTML);
+            printWindow.document.close();
+            printWindow.focus();
+            setTimeout(() => {{
+                printWindow.print();
+                printWindow.close();
+            }}, 250);
+        }}
+        
+        function downloadTXT() {{
+            const blob = new Blob([receiptText.replace(/\\\\n/g, '\\n')], {{ type: 'text/plain;charset=utf-8' }});
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = 'voter_' + voterNum + '.txt';
+            link.click();
+        }}
+        
+        function downloadHTML() {{
+            const blob = new Blob([receiptHTML.replace(/\\\\n/g, '\\n')], {{ type: 'text/html;charset=utf-8' }});
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = 'voter_' + voterNum + '.html';
+            link.click();
+        }}
+        
+        function closeModal() {{
+            document.getElementById('printModal').classList.remove('active');
+        }}
+        
+        // Close on outside click
+        document.getElementById('printModal').addEventListener('click', function(e) {{
+            if (e.target === this) {{
+                closeModal();
+            }}
+        }});
+        
+        // Close on Escape key
+        document.addEventListener('keydown', function(e) {{
+            if (e.key === 'Escape') {{
+                closeModal();
+            }}
+        }});
+    </script>
+    """
+    
+    return modal_html
+
 def show_results_table_with_print(data, columns):
-    """Display results table with print buttons for each row - IMPROVED VERSION with proper state management."""
+    """Display results table with print buttons - NO PAGE RELOAD VERSION"""
     if data.empty:
         return
     
-    # Initialize print state storage in session state if it doesn't exist
-    if 'print_preview_states' not in st.session_state:
-        st.session_state.print_preview_states = {}
-    
-    # Info box explaining the print feature
     st.markdown("""
     <div class="print-info-box">
         <strong>🖨️ प्रिन्ट मोड सक्रिय छ / Print Mode Active</strong><br>
         📋 प्रत्येक मतदातामा क्लिक गर्नुहोस् र Print बटन थिच्नुहोस्।<br>
-        💡 Click on each voter card and press the Print button to view/download receipt.
+        💡 Print opens in popup - NO page reload!
     </div>
     """, unsafe_allow_html=True)
     
     st.caption(f"📊 कुल मतदाता: {len(data):,}")
     
-    # Display each voter in an expander
     for idx, row in data.iterrows():
         voter_name = row.get('मतदाताको नाम', 'N/A')
         voter_num = row.get('मतदाता नं', 'N/A')
-        
-        # Create a unique key for this voter based on voter number for better stability
-        voter_key = f"voter_{voter_num}"
         
         with st.expander(f"🗳️ {voter_name} — मतदाता नं: {voter_num}", expanded=False):
             col1, col2 = st.columns([3, 1])
             
             with col1:
-                # Display voter information in a clean format
-                st.markdown('<div class="voter-card">', unsafe_allow_html=True)
                 for col in columns:
                     if col in row.index and col != 'मतदाता विवरणहरू':
                         value = row[col] if pd.notna(row[col]) else '-'
                         st.text(f"{col}: {value}")
-                st.markdown('</div>', unsafe_allow_html=True)
             
             with col2:
-                # Print button with unique key
-                if st.button("🖨️ मुद्रण गर्नुहोस्\n(Print)", key=f"print_btn_{voter_key}", use_container_width=True):
-                    # Toggle the print preview state
-                    st.session_state.print_preview_states[voter_key] = True
-                    st.rerun()
-            
-            # Show print preview if button was clicked
-            if st.session_state.print_preview_states.get(voter_key, False):
-                st.markdown("---")
-                st.success("✅ **रसिद पूर्वावलोकन / Receipt Preview** — 58mm थर्मल प्रिन्टर")
+                # Create unique button with onclick to open modal
+                button_id = f"printBtn_{idx}"
                 
+                # Generate receipt text
                 voter_dict = row.to_dict()
                 receipt_text = format_voter_receipt(voter_dict)
                 
-                # Show the formatted receipt
-                st.code(receipt_text, language=None)
+                # Create modal HTML
+                modal_html = create_print_modal_html(receipt_text, voter_num)
                 
-                # Create HTML version for printing
-                html_receipt = f"""
-                <!DOCTYPE html>
-                <html>
-                <head>
-                    <meta charset="UTF-8">
-                    <style>
-                        @page {{
-                            size: 58mm auto;
-                            margin: 5mm;
-                        }}
-                        body {{
-                            font-family: 'Courier New', monospace;
-                            font-size: 10pt;
-                            line-height: 1.4;
-                            width: 58mm;
-                            margin: 0 auto;
-                            padding: 5mm;
-                        }}
-                        pre {{
-                            white-space: pre-wrap;
-                            word-wrap: break-word;
-                            font-family: 'Courier New', monospace;
-                            font-size: 10pt;
-                            margin: 0;
-                        }}
-                        @media print {{
-                            body {{
-                                width: 58mm;
-                            }}
-                        }}
-                    </style>
-                </head>
-                <body>
-                    <pre>{receipt_text}</pre>
-                </body>
-                </html>
-                """
+                # Render modal (hidden by default)
+                st.components.v1.html(modal_html, height=0)
                 
-                # Action buttons
-                col_d1, col_d2, col_d3 = st.columns(3)
-                
-                with col_d1:
-                    # Browser Print Button
-                    st.markdown(f"""
-                    <button onclick="printReceipt_{voter_key}()" style="
-                        background-color: #0066cc;
+                # Print button with JavaScript to show modal
+                print_button_html = f"""
+                <button 
+                    onclick="document.getElementById('printModal').classList.add('active')"
+                    style="
+                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
                         color: white;
                         border: none;
-                        padding: 0.5rem 1rem;
-                        border-radius: 4px;
+                        padding: 0.75rem 1.5rem;
+                        border-radius: 8px;
                         cursor: pointer;
+                        font-size: 1rem;
+                        font-weight: 600;
                         width: 100%;
-                        font-size: 14px;
-                        font-weight: 500;
-                    ">
-                        🖨️ ब्राउजरमा प्रिन्ट गर्नुहोस्<br>(Browser Print)
-                    </button>
-                    <script>
-                    function printReceipt_{voter_key}() {{
-                        var printWindow = window.open('', '', 'height=600,width=300');
-                        printWindow.document.write(`{html_receipt}`);
-                        printWindow.document.close();
-                        printWindow.focus();
-                        setTimeout(function() {{
-                            printWindow.print();
-                            printWindow.close();
-                        }}, 250);
-                    }}
-                    </script>
-                    """, unsafe_allow_html=True)
-                
-                with col_d2:
-                    # Download TXT
-                    st.download_button(
-                        label="💾 TXT डाउनलोड\n(Download TXT)",
-                        data=receipt_text,
-                        file_name=f"voter_{voter_num}.txt",
-                        mime="text/plain",
-                        key=f"download_txt_{voter_key}",
-                        use_container_width=True
-                    )
-                
-                with col_d3:
-                    # Download HTML
-                    st.download_button(
-                        label="📄 HTML डाउनलोड\n(Download HTML)",
-                        data=html_receipt,
-                        file_name=f"voter_{voter_num}.html",
-                        mime="text/html",
-                        key=f"download_html_{voter_key}",
-                        use_container_width=True
-                    )
-                
-                # Close button (full width below)
-                if st.button("❌ बन्द गर्नुहोस् (Close)", key=f"close_{voter_key}", use_container_width=True):
-                    st.session_state.print_preview_states[voter_key] = False
-                    st.rerun()
+                        transition: all 0.3s;
+                    "
+                    onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 10px 20px rgba(102, 126, 234, 0.3)'"
+                    onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none'"
+                >
+                    🖨️ मुद्रण गर्नुहोस्<br>(Print)
+                </button>
+                """
+                st.components.v1.html(print_button_html, height=80)
 
 def show_results_table(data, columns):
     """Standard table display without print buttons."""
@@ -373,7 +527,6 @@ def main_app():
         with st.spinner('डाटा लोड गर्दै... / Loading data...'):
             df = load_data()
 
-        # Get all valid display columns (Standard + Any New Columns)
         display_columns = get_display_columns(df)
         
         if not display_columns:
@@ -381,20 +534,18 @@ def main_app():
             return
 
         st.sidebar.header("खोज विकल्प")
-        
-        # Add display mode toggle
         st.sidebar.markdown("---")
         st.sidebar.subheader("प्रदर्शन मोड / Display Mode")
         display_mode = st.sidebar.radio(
-            "मोड छान्नुहोस् / Select Mode:",
-            ["📋 Table View (तालिका)", "🖨️ Print View (प्रिन्ट)"],
+            "मोड छान्नुहोस्:",
+            ["📋 Table View", "🖨️ Print View"],
             index=0,
-            help="Table View: सबै मतदाता एकै पटक हेर्नुहोस् | Print View: प्रत्येक मतदाता प्रिन्ट गर्न सकिन्छ"
+            help="Print View: JavaScript popup - no reload!"
         )
-        use_print_view = (display_mode == "🖨️ Print View (प्रिन्ट)")
+        use_print_view = (display_mode == "🖨️ Print View")
         
         if use_print_view:
-            st.sidebar.info("🖨️ **Print Mode Active**\n\nप्रत्येक मतदातामा Print बटन देखिनेछ।\nEach voter will have a Print button.")
+            st.sidebar.success("🖨️ **Print Mode**: Click opens popup!")
         
         st.sidebar.markdown("---")
         
@@ -407,7 +558,6 @@ def main_app():
             index=default_index
         )
         
-        # Helper function to show results based on mode
         def display_results(filtered_df, display_cols):
             if use_print_view:
                 show_results_table_with_print(filtered_df, display_cols)
@@ -560,7 +710,6 @@ def main_app():
         if 'उमेर(वर्ष)' in df.columns:
             avg_age = df['उमेर(वर्ष)'].dropna().mean()
             st.sidebar.metric("औसत उमेर", f"{avg_age:.1f} वर्ष" if not pd.isna(avg_age) else "—")
-        # ---------------------------------------------
 
     except FileNotFoundError:
         st.error("voterlist.xlsx not found.")
