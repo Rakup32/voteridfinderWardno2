@@ -4,10 +4,57 @@ import pandas as pd
 import streamlit as st
 import base64
 import time
+import re
 import extra_streamlit_components as stx
 from credentials import USERNAME, PASSWORD
 from print_logic import format_voter_receipt, show_print_dialog, create_print_preview
-from roman_to_nepali import smart_convert, is_devanagari
+
+# Import Aksharamukha for Roman to Devanagari conversion
+try:
+    from aksharamukha import transliterate
+    AKSHARAMUKHA_AVAILABLE = True
+except ImportError:
+    AKSHARAMUKHA_AVAILABLE = False
+
+# ============================================================================
+# ROMAN TO DEVANAGARI CONVERTER - NEW ADDITION
+# ============================================================================
+
+@st.cache_data(ttl=3600)
+def roman_to_devanagari(text: str) -> str:
+    """
+    Convert Roman Nepali to Devanagari Nepali.
+    Automatically detects if text is already in Devanagari and skips conversion.
+    """
+    if not text or not isinstance(text, str):
+        return text
+    
+    text = text.strip()
+    
+    # Check if already Devanagari (Unicode range: U+0900 to U+097F)
+    if re.search(r'[\u0900-\u097F]', text):
+        return text
+    
+    # Skip conversion if Aksharamukha not available
+    if not AKSHARAMUKHA_AVAILABLE:
+        return text
+    
+    # Convert Roman to Devanagari using Aksharamukha
+    try:
+        converted = transliterate.process(
+            'ISO',
+            'Devanagari',
+            text,
+            pre_options=['IgnoreVedasreni'],
+            post_options=['RemoveUnusedAnusvara']
+        )
+        return converted
+    except Exception:
+        return text
+
+# ============================================================================
+# ORIGINAL CODE (UNCHANGED)
+# ============================================================================
 
 def _normalize_unicode(s):
     """Normalize to NFC for consistent Unicode-aware Nepali character comparison."""
@@ -18,7 +65,6 @@ def _normalize_unicode(s):
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
-# Set page configuration
 st.set_page_config(
     page_title="मतदाता सूची खोज प्रणाली",
     page_icon="🗳️",
@@ -26,11 +72,8 @@ st.set_page_config(
     initial_sidebar_state="auto"
 )
 
-# --- COOKIE MANAGER SETUP ---
 cookie_manager = stx.CookieManager()
-# ----------------------------
 
-# Function to convert image to base64
 def get_base64_image(image_path):
     try:
         with open(image_path, "rb") as img_file:
@@ -41,7 +84,6 @@ def get_base64_image(image_path):
 
 bell_image_base64 = get_base64_image("bell.png")
 
-# Custom CSS
 st.markdown("""
     <style>
     .main { padding: 0.75rem 1rem; max-width: 100%; }
@@ -67,13 +109,11 @@ st.markdown("""
     .main [data-testid="stForm"] { max-width: 400px; margin-left: auto !important; margin-right: auto !important; }
     .print-info-box { background: #e6fffa; border-left: 4px solid #38b2ac; padding: 1rem; margin: 0.5rem 0; border-radius: 4px; }
     .voter-card { background: #f7fafc; border: 1px solid #e2e8f0; padding: 0.75rem; margin: 0.5rem 0; border-radius: 6px; }
-    .roman-hint { background: #edf2f7; border-left: 3px solid #4299e1; padding: 0.5rem; margin: 0.5rem 0; border-radius: 4px; font-size: 0.85rem; color: #2d3748; }
     @media screen and (max-width: 768px) { .main { padding: 0.5rem 0.75rem; } h1 { font-size: 1.35rem !important; } }
     @media screen and (max-width: 480px) { .main { padding: 0.4rem 0.5rem; } h1 { font-size: 1.2rem !important; } }
     </style>
     """, unsafe_allow_html=True)
 
-# --- LOGIN LOGIC WITH COOKIES ---
 time.sleep(0.1) 
 cookies = cookie_manager.get_all()
 if 'voter_auth' in cookies and cookies['voter_auth'] == 'true':
@@ -134,9 +174,6 @@ def logout():
     time.sleep(0.5)
     st.rerun()
 
-# --------------------------------
-
-# We keep standard columns to preserve order, but we will add new ones dynamically
 STANDARD_COLUMNS = [
     'सि.नं.', 'मतदाता नं', 'मतदाताको नाम', 'उमेर(वर्ष)', 'लिङ्ग',
     'पति/पत्नीको नाम', 'पिता/माताको नाम'
@@ -153,8 +190,6 @@ def load_data():
     if 'उमेर(वर्ष)' in df.columns:
         df['उमेर(वर्ष)'] = pd.to_numeric(df['उमेर(वर्ष)'], errors='coerce')
 
-    # Create helper columns for search (ending in _lower)
-    # These will be hidden from the final view automatically
     if 'मतदाताको नाम' in df.columns:
         df['मतदाताको नाम_lower'] = df['मतदाताको नाम'].astype(str).map(lambda s: _normalize_unicode(s))
     if 'पिता/माताको नाम' in df.columns:
@@ -167,33 +202,26 @@ def load_data():
     return df
 
 def get_display_columns(df):
-    """
-    Returns ALL columns from the Excel file, excluding internal helper columns.
-    Preserves the order of STANDARD_COLUMNS first, then appends any new columns found.
-    """
-    # 1. Start with standard columns if they exist in the file
     final_cols = [c for c in STANDARD_COLUMNS if c in df.columns]
-    
-    # 2. Add any columns NOT in standard list, NOT ending in _lower
     for c in df.columns:
         if c not in STANDARD_COLUMNS and not c.endswith('_lower') and c not in final_cols:
             final_cols.append(c)
-            
     return final_cols
 
 def unicode_prefix_search(df, column, search_term):
-    """ENHANCED: Now supports Roman to Nepali conversion"""
+    """
+    MODIFIED: Now includes Roman to Devanagari conversion
+    """
     if not search_term or column not in df.columns:
         return df
     
-    # ADDED: Convert Roman to Nepali if needed
-    converted_term = smart_convert(search_term)
-    normalized = _normalize_unicode(converted_term)
+    # 🔥 NEW: Convert Roman to Devanagari
+    search_term = roman_to_devanagari(search_term)
     
+    normalized = _normalize_unicode(search_term)
     if not normalized:
         return df
     
-    # Check if helper column exists
     lower_col = column + "_lower"
     if lower_col not in df.columns:
         return df
@@ -202,15 +230,12 @@ def unicode_prefix_search(df, column, search_term):
     return df[mask]
 
 def show_results_table_with_print(data, columns):
-    """Display results table with print buttons for each row - ORIGINAL CODE PRESERVED."""
     if data.empty:
         return
     
-    # Initialize print state storage in session state if it doesn't exist
     if 'print_preview_states' not in st.session_state:
         st.session_state.print_preview_states = {}
     
-    # Info box explaining the print feature
     st.markdown("""
     <div class="print-info-box">
         <strong>🖨️ प्रिन्ट मोड सक्रिय छ / Print Mode Active</strong><br>
@@ -221,19 +246,15 @@ def show_results_table_with_print(data, columns):
     
     st.caption(f"📊 कुल मतदाता: {len(data):,}")
     
-    # Display each voter in an expander
     for idx, row in data.iterrows():
         voter_name = row.get('मतदाताको नाम', 'N/A')
         voter_num = row.get('मतदाता नं', 'N/A')
-        
-        # Create a unique key for this voter based on voter number for better stability
         voter_key = f"voter_{voter_num}"
         
         with st.expander(f"🗳️ {voter_name} — मतदाता नं: {voter_num}", expanded=False):
             col1, col2 = st.columns([3, 1])
             
             with col1:
-                # Display voter information in a clean format
                 st.markdown('<div class="voter-card">', unsafe_allow_html=True)
                 for col in columns:
                     if col in row.index and col != 'मतदाता विवरणहरू':
@@ -242,24 +263,18 @@ def show_results_table_with_print(data, columns):
                 st.markdown('</div>', unsafe_allow_html=True)
             
             with col2:
-                # Print button with unique key
                 if st.button("🖨️ मुद्रण गर्नुहोस्\n(Print)", key=f"print_btn_{voter_key}", use_container_width=True):
-                    # Toggle the print preview state
                     st.session_state.print_preview_states[voter_key] = True
                     st.rerun()
             
-            # Show print preview if button was clicked
             if st.session_state.print_preview_states.get(voter_key, False):
                 st.markdown("---")
                 st.success("✅ **रसिद पूर्वावलोकन / Receipt Preview** — 58mm थर्मल प्रिन्टर")
                 
                 voter_dict = row.to_dict()
                 receipt_text = format_voter_receipt(voter_dict)
-                
-                # Show the formatted receipt
                 st.code(receipt_text, language=None)
                 
-                # Download and Close buttons
                 col_d1, col_d2 = st.columns(2)
                 with col_d1:
                     st.download_button(
@@ -272,13 +287,11 @@ def show_results_table_with_print(data, columns):
                     )
                 
                 with col_d2:
-                    # Close button that properly closes the preview
                     if st.button("❌ बन्द गर्नुहोस् (Close)", key=f"close_{voter_key}", use_container_width=True):
                         st.session_state.print_preview_states[voter_key] = False
                         st.rerun()
 
 def show_results_table(data, columns):
-    """Standard table display without print buttons - ORIGINAL CODE PRESERVED."""
     if data.empty:
         return
     calculated_height = (len(data) + 1) * 35 
@@ -288,6 +301,10 @@ def show_results_table(data, columns):
 def main_app():
     st.title("🗳️ मतदाता सूची खोज प्रणाली")
     st.markdown("**Voter List Search System**")
+    
+    # Show Roman typing hint if Aksharamukha is available
+    if AKSHARAMUKHA_AVAILABLE:
+        st.info("💡 **Roman Typing Enabled** - Type in English (e.g., 'ram', 'krishna') and search will work!")
     
     with st.sidebar:
         if st.button("🚪 Logout / बाहिर निस्कनुहोस्", use_container_width=True):
@@ -299,7 +316,6 @@ def main_app():
         with st.spinner('डाटा लोड गर्दै... / Loading data...'):
             df = load_data()
 
-        # Get all valid display columns (Standard + Any New Columns)
         display_columns = get_display_columns(df)
         
         if not display_columns:
@@ -308,16 +324,6 @@ def main_app():
 
         st.sidebar.header("खोज विकल्प")
         
-        # ADDED: Roman typing info
-        st.sidebar.markdown("""
-        <div class="roman-hint">
-            <strong>💡 Roman Typing</strong><br>
-            Type: <code>ram</code> → राम<br>
-            Type: <code>krishna</code> → कृष्ण
-        </div>
-        """, unsafe_allow_html=True)
-        
-        # Add display mode toggle - ORIGINAL CODE PRESERVED
         st.sidebar.markdown("---")
         st.sidebar.subheader("प्रदर्शन मोड / Display Mode")
         display_mode = st.sidebar.radio(
@@ -333,7 +339,6 @@ def main_app():
         
         st.sidebar.markdown("---")
         
-        # ORIGINAL: Default to उन्नत खोज (index 7)
         default_index = 7
         search_option = st.sidebar.selectbox(
             "खोज प्रकार छान्नुहोस्:",
@@ -343,14 +348,11 @@ def main_app():
             index=default_index
         )
         
-        # Helper function to show results based on mode - ORIGINAL CODE
         def display_results(filtered_df, display_cols):
             if use_print_view:
                 show_results_table_with_print(filtered_df, display_cols)
             else:
                 show_results_table(filtered_df, display_cols)
-        
-        # ALL SEARCH OPTIONS - ORIGINAL CODE WITH ONLY Roman conversion added to text inputs
         
         if search_option == "सबै डाटा हेर्नुहोस्":
             st.subheader("सम्पूर्ण मतदाता सूची")
@@ -360,10 +362,10 @@ def main_app():
         
         elif search_option == "मतदाताको नामबाट खोज्नुहोस्":
             st.subheader("मतदाताको नामबाट खोज्नुहोस्")
-            st.caption("🔤 उपसर्ग खोज / Prefix search (Nepali or Roman)")
+            st.caption("🔤 उपसर्ग खोज / Prefix search (Type in Nepali or Roman)")
             with st.expander("📘 उदाहरण / Examples"):
                 st.markdown("**Nepali:** 'र' finds 'राम', 'रमेश'")
-                st.markdown("**Roman:** 'ram' finds 'राम'")
+                st.markdown("**Roman:** 'ram' finds 'राम', 'रामेश'")
             
             search_name = st.text_input("मतदाताको नाम लेख्नुहोस्:", "", key="name_search")
             if search_name:
@@ -391,7 +393,7 @@ def main_app():
 
         elif search_option == "पिता/माताको नामबाट खोज्नुहोस्":
             st.subheader("पिता/माताको नामबाट खोज्नुहोस्")
-            st.caption("🔤 Nepali or Roman typing supported")
+            st.caption("Type in Nepali or Roman")
             search_parent = st.text_input("पिता वा माताको नाम:", "", key="parent_search")
             if search_parent:
                 filtered_df = unicode_prefix_search(df, 'पिता/माताको नाम', search_parent)
@@ -404,7 +406,7 @@ def main_app():
 
         elif search_option == "पति/पत्नीको नामबाट खोज्नुहोस्":
             st.subheader("पति/पत्नीको नामबाट खोज्नुहोस्")
-            st.caption("🔤 Nepali or Roman typing supported")
+            st.caption("Type in Nepali or Roman")
             search_spouse = st.text_input("पति वा पत्नीको नाम:", "", key="spouse_search")
             if search_spouse:
                 filtered_df = unicode_prefix_search(df, 'पति/पत्नीको नाम', search_spouse)
@@ -447,7 +449,7 @@ def main_app():
 
         elif search_option == "उन्नत खोज (सबै फिल्टर)":
             st.subheader("🔍 उन्नत खोज")
-            st.caption("🔤 All name fields support Roman typing (e.g., ram, krishna)")
+            st.caption("All name fields support Roman typing")
             col1, col2 = st.columns(2)
             with col1:
                 name_filter = st.text_input("मतदाताको नाम:", key="adv_name")
@@ -463,17 +465,17 @@ def main_app():
             if st.button("🔍 खोज्नुहोस्", type="primary"):
                 mask = pd.Series([True] * len(df), index=df.index)
                 if name_filter:
-                    # ADDED: Convert Roman to Nepali
-                    converted_name = smart_convert(name_filter)
-                    mask &= df['मतदाताको नाम_lower'].str.startswith(_normalize_unicode(converted_name), na=False)
+                    # 🔥 NEW: Convert Roman to Devanagari
+                    name_filter = roman_to_devanagari(name_filter)
+                    mask &= df['मतदाताको नाम_lower'].str.startswith(_normalize_unicode(name_filter), na=False)
                 if parent_filter:
-                    # ADDED: Convert Roman to Nepali
-                    converted_parent = smart_convert(parent_filter)
-                    mask &= df['पिता/माताको नाम_lower'].str.startswith(_normalize_unicode(converted_parent), na=False)
+                    # 🔥 NEW: Convert Roman to Devanagari
+                    parent_filter = roman_to_devanagari(parent_filter)
+                    mask &= df['पिता/माताको नाम_lower'].str.startswith(_normalize_unicode(parent_filter), na=False)
                 if spouse_filter:
-                    # ADDED: Convert Roman to Nepali
-                    converted_spouse = smart_convert(spouse_filter)
-                    mask &= (df['पति/पत्नीको नाम'] != '-') & df['पति/पत्नीको नाम_lower'].str.startswith(_normalize_unicode(converted_spouse), na=False)
+                    # 🔥 NEW: Convert Roman to Devanagari
+                    spouse_filter = roman_to_devanagari(spouse_filter)
+                    mask &= (df['पति/पत्नीको नाम'] != '-') & df['पति/पत्नीको नाम_lower'].str.startswith(_normalize_unicode(spouse_filter), na=False)
                 if gender_filter != "सबै":
                     mask &= (df['लिङ्ग'] == gender_filter)
                 
@@ -490,7 +492,6 @@ def main_app():
                 else:
                     st.warning("कुनै पनि मतदाता भेटिएन")
 
-        # --- STATISTICS SECTION - ORIGINAL CODE PRESERVED ---
         st.sidebar.markdown("---")
         st.sidebar.subheader("तथ्याङ्क")
         st.sidebar.metric("कुल मतदाता", f"{len(df):,}")
@@ -508,7 +509,6 @@ def main_app():
         if 'उमेर(वर्ष)' in df.columns:
             avg_age = df['उमेर(वर्ष)'].dropna().mean()
             st.sidebar.metric("औसत उमेर", f"{avg_age:.1f} वर्ष" if not pd.isna(avg_age) else "—")
-        # ---------------------------------------------
 
     except FileNotFoundError:
         st.error("voterlist.xlsx not found.")
