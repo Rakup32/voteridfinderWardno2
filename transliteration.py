@@ -1,10 +1,11 @@
 """
-Roman to Devanagari Transliteration Module
-==========================================
-Production-ready module for converting Roman Nepali input to Devanagari script.
+Roman to Devanagari Transliteration - AKSHARAMUKHA VERSION
+==========================================================
+Production-ready module using Aksharamukha library.
+Includes comprehensive testing and debugging.
 
-Uses Aksharamukha library for accurate transliteration.
-Includes caching, input detection, and error handling.
+Installation:
+    pip install aksharamukha
 
 Author: Voter Search System
 Date: 2026-01-31
@@ -14,13 +15,21 @@ import re
 import streamlit as st
 from typing import Optional
 
-# Try to import aksharamukha
+# ============================================================================
+# AKSHARAMUKHA IMPORT WITH DEBUG INFO
+# ============================================================================
+
+AKSHARAMUKHA_AVAILABLE = False
+IMPORT_ERROR = None
+
 try:
     from aksharamukha import transliterate
     AKSHARAMUKHA_AVAILABLE = True
-except ImportError:
-    AKSHARAMUKHA_AVAILABLE = False
-    print("Warning: aksharamukha not installed. Install with: pip install aksharamukha")
+    print("✅ Aksharamukha loaded successfully!")
+except ImportError as e:
+    IMPORT_ERROR = str(e)
+    print(f"❌ Aksharamukha not available: {e}")
+    print("   Install with: pip install aksharamukha")
 
 
 def is_devanagari(text: str) -> bool:
@@ -32,14 +41,6 @@ def is_devanagari(text: str) -> bool:
         
     Returns:
         True if text contains Devanagari characters, False otherwise
-        
-    Examples:
-        >>> is_devanagari("राम")
-        True
-        >>> is_devanagari("ram")
-        False
-        >>> is_devanagari("राम123")
-        True
     """
     if not text:
         return False
@@ -58,14 +59,6 @@ def is_roman(text: str) -> bool:
         
     Returns:
         True if text contains only Roman characters, False otherwise
-        
-    Examples:
-        >>> is_roman("ram")
-        True
-        >>> is_roman("राम")
-        False
-        >>> is_roman("ram123")
-        True
     """
     if not text:
         return False
@@ -76,53 +69,48 @@ def is_roman(text: str) -> bool:
 
 
 @st.cache_data(show_spinner=False)
-def roman_to_devanagari(text: str, script_source: str = "ISO", script_target: str = "Devanagari") -> str:
+def roman_to_devanagari_aksharamukha(text: str) -> str:
     """
     Convert Roman script to Devanagari using Aksharamukha.
     
-    This function is cached for performance in live search scenarios.
+    This function uses the industry-standard Aksharamukha library
+    for accurate transliteration.
     
     Args:
         text: Input text in Roman script
-        script_source: Source script name (default: "ISO" for standard Roman)
-        script_target: Target script name (default: "Devanagari")
         
     Returns:
         Transliterated text in Devanagari script
         
     Examples:
-        >>> roman_to_devanagari("ram")
+        >>> roman_to_devanagari_aksharamukha("ram")
         'राम'
-        >>> roman_to_devanagari("nepal")
+        >>> roman_to_devanagari_aksharamukha("nepal")
         'नेपाल'
-        >>> roman_to_devanagari("kathmandu")
-        'काठमाडौं'
-        
-    Note:
-        - Uses Streamlit's @st.cache_data for fast repeated conversions
-        - Falls back to original text if aksharamukha is not available
     """
     if not text or not text.strip():
         return text
     
     if not AKSHARAMUKHA_AVAILABLE:
-        # Return original text with warning
+        print(f"⚠️ Aksharamukha not available, returning original: {text}")
         return text
     
     try:
-        # Transliterate using Aksharamukha
-        # ISO is a good default for Roman/IAST transliteration
+        # Convert using Aksharamukha
+        # ISO scheme works well for standard Roman transliteration
         devanagari_text = transliterate.process(
-            script_source,
-            script_target,
+            'ISO',           # Source: ISO/IAST transliteration
+            'Devanagari',    # Target: Devanagari script
             text,
             pre_options=['IgnoreVedicAccents'],
             post_options=['IgnoreSwaras']
         )
+        
+        print(f"🔄 Converted: '{text}' → '{devanagari_text}'")
         return devanagari_text
+        
     except Exception as e:
-        # If conversion fails, return original text
-        print(f"Transliteration error: {e}")
+        print(f"❌ Conversion error for '{text}': {e}")
         return text
 
 
@@ -133,7 +121,7 @@ def smart_convert_to_devanagari(text: str) -> str:
     This function:
     1. Detects if input is already Devanagari (returns as-is)
     2. Detects if input is Roman (converts to Devanagari)
-    3. Handles mixed input (converts Roman parts only)
+    3. Logs all conversions for debugging
     
     Args:
         text: User input in any script
@@ -146,76 +134,63 @@ def smart_convert_to_devanagari(text: str) -> str:
         'राम'
         >>> smart_convert_to_devanagari("राम")
         'राम'
-        >>> smart_convert_to_devanagari("aahara")
-        'आहारा'
-        
-    This is the main function to use in your search application.
     """
     if not text or not text.strip():
         return text
     
     text = text.strip()
     
-    # If already Devanagari, return as-is
+    # Check if already Devanagari
     if is_devanagari(text):
+        print(f"✅ Already Devanagari: '{text}'")
         return text
     
-    # If Roman script, convert to Devanagari
+    # Check if Roman
     if is_roman(text):
-        return roman_to_devanagari(text)
+        print(f"🔄 Converting Roman: '{text}'")
+        converted = roman_to_devanagari_aksharamukha(text)
+        print(f"   Result: '{converted}'")
+        return converted
     
-    # For mixed or unclear input, attempt conversion
-    return roman_to_devanagari(text)
+    # Unknown format
+    print(f"⚠️ Unknown format, attempting conversion: '{text}'")
+    return roman_to_devanagari_aksharamukha(text)
 
 
-# ============================================================================
-# INTEGRATION FUNCTIONS
-# ============================================================================
-
-def create_search_input_with_conversion(
-    label: str = "खोज्नुहोस् / Search",
-    key: str = "search_input",
-    placeholder: str = "Type in Nepali or English...",
-    help_text: str = "आप नेपाली वा English मा टाइप गर्न सक्नुहुन्छ"
-) -> tuple[str, str]:
+def check_installation():
     """
-    Create a Streamlit search input with automatic Roman → Devanagari conversion.
-    
-    Args:
-        label: Label for the search input
-        key: Unique key for the input widget
-        placeholder: Placeholder text
-        help_text: Help text to display
-        
-    Returns:
-        Tuple of (original_input, converted_input)
-        - original_input: What the user typed
-        - converted_input: Devanagari version for searching
-        
-    Usage:
-        ```python
-        original, devanagari = create_search_input_with_conversion()
-        if devanagari:
-            # Use devanagari for searching
-            results = search_voters(devanagari)
-        ```
+    Check if Aksharamukha is properly installed.
+    Returns status and instructions.
     """
-    # Create the input field
-    user_input = st.text_input(
-        label,
-        key=key,
-        placeholder=placeholder,
-        help=help_text
-    )
-    
-    # Convert to Devanagari if needed
-    devanagari_input = smart_convert_to_devanagari(user_input) if user_input else ""
-    
-    # Show conversion preview if input was Roman
-    if user_input and devanagari_input != user_input:
-        st.caption(f"🔄 Searching for: **{devanagari_input}**")
-    
-    return user_input, devanagari_input
+    if AKSHARAMUKHA_AVAILABLE:
+        return {
+            'installed': True,
+            'message': '✅ Aksharamukha is installed and working!',
+            'version': 'Available'
+        }
+    else:
+        return {
+            'installed': False,
+            'message': '❌ Aksharamukha is NOT installed',
+            'error': IMPORT_ERROR,
+            'instructions': '''
+To install Aksharamukha:
+
+1. Using pip:
+   pip install aksharamukha
+
+2. Using pip with system packages flag:
+   pip install aksharamukha --break-system-packages
+
+3. In a virtual environment:
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\\Scripts\\activate
+   pip install aksharamukha
+
+4. For Streamlit Cloud, add to requirements.txt:
+   aksharamukha>=1.0.0
+'''
+        }
 
 
 # ============================================================================
@@ -223,53 +198,96 @@ def create_search_input_with_conversion(
 # ============================================================================
 
 def test_transliteration():
-    """
-    Test the transliteration functions with common Nepali names and words.
+    """Test transliteration with common Nepali words and names."""
     
-    Run this to verify the system works correctly.
-    """
+    print("\n" + "=" * 70)
+    print("AKSHARAMUKHA INSTALLATION CHECK")
+    print("=" * 70)
+    
+    status = check_installation()
+    print(status['message'])
+    if not status['installed']:
+        print(f"\nError: {status['error']}")
+        print(status['instructions'])
+        return
+    
+    print("\n" + "=" * 70)
+    print("TRANSLITERATION TEST RESULTS")
+    print("=" * 70)
+    
     test_cases = [
-        # (roman_input, expected_devanagari)
+        # Common names
         ("ram", "राम"),
         ("sita", "सीता"),
+        ("hari", "हरि"),
+        ("krishna", "कृष्ण"),
+        
+        # Places
         ("nepal", "नेपाल"),
         ("kathmandu", "काठमाडौं"),
         ("pokhara", "पोखरा"),
-        ("aahara", "आहारा"),
+        
+        # Common words
         ("namaste", "नमस्ते"),
         ("dhanyabad", "धन्यबाद"),
+        ("maya", "माया"),
+        ("devi", "देवी"),
+        
+        # Already Devanagari (should not change)
+        ("राम", "राम"),
+        ("नेपाल", "नेपाल"),
     ]
     
-    print("=" * 60)
-    print("TRANSLITERATION TEST RESULTS")
-    print("=" * 60)
+    passed = 0
+    failed = 0
     
     for roman, expected in test_cases:
-        result = roman_to_devanagari(roman)
-        status = "✅ PASS" if result == expected else "❌ FAIL"
-        print(f"{status} | {roman:15} → {result:15} (expected: {expected})")
+        result = smart_convert_to_devanagari(roman)
+        
+        # For debugging
+        print(f"\nInput: '{roman}'")
+        print(f"Expected: '{expected}'")
+        print(f"Got: '{result}'")
+        print(f"Match: {result == expected}")
+        
+        if result == expected:
+            status = "✅ PASS"
+            passed += 1
+        else:
+            status = "❌ FAIL"
+            failed += 1
+        
+        print(f"{status} | {roman:20} → {result:20}")
     
-    print("=" * 60)
+    print("\n" + "=" * 70)
+    print(f"Results: {passed} passed, {failed} failed out of {len(test_cases)} tests")
+    print("=" * 70)
 
 
 def create_transliteration_demo():
-    """
-    Create a Streamlit demo app for testing transliteration.
-    
-    Use this to test the system in a standalone Streamlit app.
-    """
-    st.title("🔄 Roman to Devanagari Converter")
+    """Create a Streamlit demo app for testing transliteration."""
+    st.title("🔄 Roman to Devanagari Converter (Aksharamukha)")
     st.markdown("---")
     
-    # Info box
+    # Check installation
+    status = check_installation()
+    
+    if status['installed']:
+        st.success(status['message'])
+    else:
+        st.error(status['message'])
+        st.code(status['instructions'])
+        st.stop()
+    
     st.info("""
     **How to use:**
-    - Type in Roman/English (e.g., 'ram', 'nepal', 'kathmandu')
+    - Type in Roman/English (e.g., 'ram', 'nepal', 'hari')
     - Type in Devanagari (e.g., 'राम', 'नेपाल')
     - The system will automatically detect and convert
     """)
     
-    # Input
+    # Input section
+    st.markdown("### Test Conversion")
     user_input = st.text_input(
         "Enter text:",
         placeholder="Type 'ram' or 'राम'...",
@@ -283,10 +301,12 @@ def create_transliteration_demo():
             st.metric("Input", user_input)
             is_dev = is_devanagari(user_input)
             is_rom = is_roman(user_input)
-            st.caption(f"Devanagari: {is_dev} | Roman: {is_rom}")
+            st.caption(f"Devanagari: {is_dev}")
+            st.caption(f"Roman: {is_rom}")
         
         with col2:
-            converted = smart_convert_to_devanagari(user_input)
+            with st.spinner("Converting..."):
+                converted = smart_convert_to_devanagari(user_input)
             st.metric("Converted", converted)
             if converted == user_input:
                 st.caption("✅ Already Devanagari")
@@ -295,32 +315,44 @@ def create_transliteration_demo():
         
         with col3:
             st.metric("Script Type", "Devanagari" if is_devanagari(user_input) else "Roman")
+            if is_roman(user_input):
+                st.caption("Will be converted")
     
-    # Quick test buttons
+    # Quick test section
     st.markdown("---")
-    st.subheader("Quick Test")
-    
-    col1, col2, col3 = st.columns(3)
+    st.subheader("Quick Test - Common Nepali Names")
     
     test_words = [
         ("ram", "राम"),
+        ("sita", "सीता"),
+        ("hari", "हरि"),
+        ("krishna", "कृष्ण"),
         ("nepal", "नेपाल"),
-        ("kathmandu", "काठमाडौं"),
-        ("aahara", "आहारा"),
-        ("namaste", "नमस्ते"),
-        ("dhanyabad", "धन्यबाद"),
+        ("maya", "माया"),
     ]
     
+    cols = st.columns(3)
+    
     for i, (roman, expected) in enumerate(test_words):
-        col = [col1, col2, col3][i % 3]
-        with col:
-            result = roman_to_devanagari(roman)
+        with cols[i % 3]:
+            result = smart_convert_to_devanagari(roman)
             match = "✅" if result == expected else "❌"
-            st.code(f"{match} {roman} → {result}")
+            st.code(f"{match} {roman}\n→ {result}\n(expect: {expected})")
+    
+    # Debugging section
+    st.markdown("---")
+    st.subheader("🔧 Debugging Information")
+    
+    if st.checkbox("Show debug info"):
+        st.json({
+            "aksharamukha_available": AKSHARAMUKHA_AVAILABLE,
+            "import_error": IMPORT_ERROR if IMPORT_ERROR else "None",
+            "cache_info": "Using @st.cache_data for performance"
+        })
 
 
 # ============================================================================
-# MAIN DEMO
+# MAIN
 # ============================================================================
 
 if __name__ == "__main__":
@@ -330,9 +362,9 @@ if __name__ == "__main__":
         create_transliteration_demo()
     except:
         # Running as regular Python script
-        print("\nRoman to Devanagari Transliteration Module")
-        print("=" * 60)
-        print("\nRunning tests...\n")
+        print("\n🔄 Roman to Devanagari Transliteration Module")
+        print("Using Aksharamukha Library")
+        print("=" * 70)
         test_transliteration()
         print("\nTo run the interactive demo:")
-        print("  streamlit run transliteration.py")
+        print("  streamlit run transliteration_aksharamukha.py")
