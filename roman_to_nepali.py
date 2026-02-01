@@ -14,7 +14,8 @@ import os
 
 COMMON_NAMES = {
     # Male First Names (A-Z)
-    'abhay': 'अभय', 'abhishek': 'अभिषेक', 'abhiyan': 'अभियान',
+    'binod': 'बिनोद','abhay': 'अभय', 'abhishek': 'अभिषेक', 'abhiyan': 'अभियान',
+    'vinod': 'विनोद',
     'achyut': 'अच्युत', 'achyuta': 'अच्युत',
     'aditya': 'आदित्य', 'adit': 'आदित',
     'agni': 'अग्नी', 'agniraj': 'अग्नीराज',
