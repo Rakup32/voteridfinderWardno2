@@ -1,20 +1,24 @@
 """
 PRODUCTION Roman to Nepali Converter - FINAL VERSION
 ====================================================
-Complete solution using indic-transliteration + custom converter + voter database.
+Complete solution using voter database + custom converter + indic-transliteration.
 
 Installation:
     pip install indic-transliteration
 
-Priority System:
-    1. Voter names database (voter_names_db.json) - Learned from 8000+ actual names
-    2. indic-transliteration library - Professional transliteration
-    3. Nepali post-processing - Fix common issues
-    4. Custom phonetic converter - Ultimate fallback
+PRIORITY SYSTEM (Updated per user request):
+    1. Voter names database (voter_names_db.json) - Exact matches from 8000+ names
+    2. Nepali corrections database - Known special cases
+    3. Custom roman_to_nepali.py converter - YOUR phonetic engine (CHECKED FIRST!)
+    4. indic-transliteration library - Professional transliteration (FALLBACK ONLY)
+
+This ensures your existing roman_to_nepali.py with 500+ common names 
+and phonetic engine is used BEFORE falling back to indic-transliteration.
 
 Features:
-- ✅ Uses indic-transliteration (NOT Aksharamukha)
-- ✅ Nepali-specific post-processing (halant removal, corrections)
+- ✅ Custom converter checked FIRST (not last)
+- ✅ indic-transliteration used only as fallback
+- ✅ Nepali-specific post-processing
 - ✅ Smart script detection
 - ✅ Streamlit caching (@st.cache_data)
 - ✅ Offline operation
@@ -234,11 +238,11 @@ def roman_to_nepali(text: str) -> str:
     """
     Convert Roman to Nepali (Devanagari).
     
-    Uses 4-tier priority system:
+    NEW PRIORITY SYSTEM (User Requested):
     1. Voter database (exact matches from real data)
-    2. Nepali corrections (common words)
-    3. indic-transliteration (with post-processing)
-    4. Custom converter (fallback)
+    2. Nepali corrections (common words)  
+    3. Custom roman_to_nepali.py converter (YOUR CONVERTER FIRST!)
+    4. indic-transliteration (only if custom converter fails)
     
     Args:
         text: Roman input
@@ -262,16 +266,34 @@ def roman_to_nepali(text: str) -> str:
     original = text.strip()
     text_lower = original.lower()
     
-    # PRIORITY 1: Voter database
+    # PRIORITY 1: Voter database (exact matches)
     voter_db = load_voter_database()
     if text_lower in voter_db:
+        print(f"✅ Found in voter DB: '{original}' → '{voter_db[text_lower]}'")
         return voter_db[text_lower]
     
-    # PRIORITY 2: Nepali corrections
+    # PRIORITY 2: Nepali corrections (known issues)
     if text_lower in CORRECTIONS_LOOKUP:
+        print(f"✅ Found in corrections: '{original}' → '{CORRECTIONS_LOOKUP[text_lower]}'")
         return CORRECTIONS_LOOKUP[text_lower]
     
-    # PRIORITY 3: indic-transliteration
+    # PRIORITY 3: Custom roman_to_nepali.py converter (YOUR CONVERTER!)
+    if CUSTOM_AVAILABLE:
+        try:
+            result = custom_convert(original)
+            print(f"✅ Custom converter: '{original}' → '{result}'")
+            
+            # If custom converter returned Devanagari, use it
+            if result and is_devanagari(result):
+                return result
+            
+            # If custom converter failed (returned Roman), continue to indic
+            print(f"⚠️ Custom converter returned Roman, trying indic-transliteration...")
+            
+        except Exception as e:
+            print(f"⚠️ Custom converter error: {e}")
+    
+    # PRIORITY 4: indic-transliteration (fallback only)
     if INDIC_AVAILABLE:
         try:
             # Use ITRANS scheme (good for Nepali)
@@ -280,18 +302,14 @@ def roman_to_nepali(text: str) -> str:
             # Apply Nepali post-processing
             result = nepali_post_process(result, original)
             
+            print(f"✅ indic-transliteration (fallback): '{original}' → '{result}'")
             return result
+            
         except Exception as e:
             print(f"⚠️ indic-transliteration error: {e}")
     
-    # PRIORITY 4: Custom converter
-    if CUSTOM_AVAILABLE:
-        try:
-            return custom_convert(original)
-        except Exception as e:
-            print(f"⚠️ Custom converter error: {e}")
-    
-    # Fallback: return original
+    # Last resort: return original
+    print(f"❌ No conversion available for '{original}'")
     return original
 
 # ============================================================================
