@@ -236,54 +236,6 @@ def show_print_dialog(voter_data):
         st.success("✅ Ready to print!")
         st.caption("Copy text above or download to print on thermal printer")
 
-def generate_browser_print(voter_data):
-    """
-    Generates an HTML snippet with a print button that triggers 
-    the browser's system print dialog.
-    """
-    # Uses your existing formatting logic
-    receipt_text = format_voter_receipt(voter_data)
-    
-    # HTML and CSS specifically for 58mm thermal paper
-    html_content = f"""
-    <div id="printable-receipt" style="
-        width: 44mm; 
-        font-family: 'Courier New', monospace; 
-        font-size: 11px; 
-        white-space: pre-wrap;
-        color: black;
-    ">{receipt_text}</div>
-
-    <style>
-    @media print {{
-        /* Hide everything else on the Streamlit page */
-        body * {{ visibility: hidden; }}
-        /* Only show the receipt */
-        #printable-receipt, #printable-receipt * {{ visibility: visible; }}
-        #printable-receipt {{
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 100%;
-        }}
-        /* Set page size for 58mm printer */
-        @page {{ size: 58mm auto; margin: 0; }}
-    }}
-    </style>
-
-    <button onclick="window.print()" style="
-        width: 100%;
-        padding: 12px;
-        background: linear-gradient(135deg, #c53030 0%, #9b2c2c 100%);
-        color: white;
-        border: none;
-        border-radius: 8px;
-        cursor: pointer;
-        font-weight: bold;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-    ">🖨️ रसिद प्रिन्ट गर्नुहोस् (Print Receipt)</button>
-    """
-    return html_content
 
 def format_compact_receipt(voter_data):
     """
