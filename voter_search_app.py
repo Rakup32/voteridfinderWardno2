@@ -1,8 +1,19 @@
 """
-Voter Search Application with Roman → Devanagari Support
-=========================================================
-Enhanced version with automatic transliteration support.
-Users can type in Roman/English or Devanagari - both work!
+Voter Search Application - FINAL VERSION WITH ROMAN SUPPORT
+===========================================================
+Complete integration with Roman to Nepali conversion.
+
+Features:
+- ✅ Search in English or Nepali
+- ✅ Uses indic-transliteration + custom converter
+- ✅ Voter database for exact matches
+- ✅ Nepali post-processing
+- ✅ Original search logic UNCHANGED
+- ✅ Fast with Streamlit caching
+- ✅ Production-ready
+
+Author: Voter Search System
+Date: 2026-01-31
 """
 
 import logging
@@ -15,8 +26,11 @@ import extra_streamlit_components as stx
 from credentials import USERNAME, PASSWORD
 from print_logic import format_voter_receipt
 
-# Import transliteration module
-from transliteration import smart_convert_to_devanagari, is_devanagari, is_roman
+# ============================================================================
+# IMPORT NEPALI CONVERTER
+# ============================================================================
+
+from nepali_converter import smart_convert_to_nepali, is_devanagari, is_roman, check_installation
 
 def _normalize_unicode(s):
     """Normalize to NFC for consistent Unicode-aware Nepali character comparison."""
@@ -65,12 +79,13 @@ st.markdown("""
     .conversion-badge {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white;
-        padding: 6px 12px;
-        border-radius: 6px;
-        font-size: 0.85rem;
+        padding: 8px 14px;
+        border-radius: 8px;
+        font-size: 0.9rem;
         font-weight: 600;
         display: inline-block;
-        margin: 5px 0;
+        margin: 8px 0;
+        box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
     }
     
     /* Login Page Styling */
@@ -233,23 +248,24 @@ def get_display_columns(df):
 
 def unicode_prefix_search(df, column, search_term):
     """
-    Enhanced search with Roman → Devanagari conversion support.
+    Enhanced search with Roman → Nepali conversion support.
     
-    This is the key integration point - it converts Roman input to Devanagari
-    before searching, without modifying the existing search logic.
+    THIS IS THE KEY INTEGRATION POINT:
+    - Converts Roman input to Nepali BEFORE searching
+    - Does NOT modify the search algorithm
+    - Does NOT modify the voter data
     """
     if not search_term or column not in df.columns:
         return df
     
     # ============================================
-    # ROMAN → DEVANAGARI CONVERSION (NEW!)
+    # ROMAN → NEPALI CONVERSION (NEW!)
     # ============================================
-    # Convert Roman input to Devanagari if needed
-    search_term_devanagari = smart_convert_to_devanagari(search_term)
+    search_term_nepali = smart_convert_to_nepali(search_term)
+    # ============================================
     
-    # Normalize the converted text
-    normalized = _normalize_unicode(search_term_devanagari)
-    # ============================================
+    # Original search logic (UNCHANGED)
+    normalized = _normalize_unicode(search_term_nepali)
     
     if not normalized:
         return df
@@ -262,10 +278,10 @@ def unicode_prefix_search(df, column, search_term):
     return df[mask]
 
 def show_conversion_indicator(original_input: str, converted_input: str):
-    """Show a visual indicator when Roman → Devanagari conversion happens."""
-    if original_input and converted_input != original_input:
+    """Show visual indicator when conversion happens"""
+    if original_input and converted_input != original_input and not is_devanagari(original_input):
         st.markdown(
-            f'<div class="conversion-badge">🔄 Searching: {converted_input}</div>',
+            f'<div class="conversion-badge">🔄 Searching for: {converted_input}</div>',
             unsafe_allow_html=True
         )
 
@@ -373,7 +389,7 @@ def show_results_table(data, columns):
 
 def main_app():
     st.title("🗳️ मतदाता सूची खोज प्रणाली")
-    st.markdown("**Voter List Search System** • 🔄 Roman/English Support")
+    st.markdown("**Voter List Search System** • 🔄 **Roman/English Support Enabled**")
     
     with st.sidebar:
         if st.button("🚪 Logout / बाहिर निस्कनुहोस्", use_container_width=True):
@@ -393,8 +409,22 @@ def main_app():
 
         st.sidebar.header("🔍 खोज विकल्प")
         
-        # Add info about Roman support
-        st.sidebar.info("ℹ️ **Roman/English Support**\n\nType 'ram' or 'राम' - both work!")
+        # Show conversion system status
+        conv_status = check_installation()
+        if conv_status['indic_transliteration']:
+            st.sidebar.success("✅ Roman/English Support Active")
+        else:
+            st.sidebar.warning("⚠️ Limited Roman support\nInstall: pip install indic-transliteration")
+        
+        st.sidebar.info("""
+**💡 Type in English or Nepali!**
+
+Examples:
+- `ram` → finds राम
+- `shyam` → finds श्याम  
+- `nepal` → finds नेपाल
+- `राम` → finds राम
+        """)
         
         st.sidebar.markdown("---")
         st.sidebar.subheader("📊 प्रदर्शन मोड / Display Mode")
@@ -429,7 +459,7 @@ def main_app():
         
         if search_option == "उन्नत खोज (सबै फिल्टर)":
             st.subheader("🔍 उन्नत खोज / Advanced Search")
-            st.caption("💡 आप नेपाली वा English मा टाइप गर्न सक्नुहुन्छ (Type in Nepali or English)")
+            st.caption("💡 Type in Nepali or English (राम or ram)")
             
             col1, col2 = st.columns(2)
             with col1:
@@ -438,21 +468,24 @@ def main_app():
                     key="adv_name",
                     placeholder="राम or ram"
                 )
-                show_conversion_indicator(name_filter, smart_convert_to_devanagari(name_filter))
+                if name_filter:
+                    show_conversion_indicator(name_filter, smart_convert_to_nepali(name_filter))
                 
                 parent_filter = st.text_input(
                     "पिता/माताको नाम / Parent Name:", 
                     key="adv_parent",
                     placeholder="हरि or hari"
                 )
-                show_conversion_indicator(parent_filter, smart_convert_to_devanagari(parent_filter))
+                if parent_filter:
+                    show_conversion_indicator(parent_filter, smart_convert_to_nepali(parent_filter))
                 
                 spouse_filter = st.text_input(
                     "पति/पत्नीको नाम / Spouse Name:", 
                     key="adv_spouse",
                     placeholder="सीता or sita"
                 )
-                show_conversion_indicator(spouse_filter, smart_convert_to_devanagari(spouse_filter))
+                if spouse_filter:
+                    show_conversion_indicator(spouse_filter, smart_convert_to_nepali(spouse_filter))
                 
             with col2:
                 genders = ["सबै"] + list(set([g for g in df['लिङ्ग'].unique().tolist() if pd.notna(g)] + ["पुरुष", "महिला"]))
@@ -464,16 +497,16 @@ def main_app():
             if st.button("🔍 खोज्नुहोस् / Search", type="primary", use_container_width=True):
                 mask = pd.Series([True] * len(df), index=df.index)
                 
-                # Convert filters to Devanagari before searching
+                # Convert filters to Nepali before searching
                 if name_filter:
-                    name_dev = smart_convert_to_devanagari(name_filter)
-                    mask &= df['मतदाताको नाम_lower'].str.startswith(_normalize_unicode(name_dev), na=False)
+                    name_nepali = smart_convert_to_nepali(name_filter)
+                    mask &= df['मतदाताको नाम_lower'].str.startswith(_normalize_unicode(name_nepali), na=False)
                 if parent_filter:
-                    parent_dev = smart_convert_to_devanagari(parent_filter)
-                    mask &= df['पिता/माताको नाम_lower'].str.startswith(_normalize_unicode(parent_dev), na=False)
+                    parent_nepali = smart_convert_to_nepali(parent_filter)
+                    mask &= df['पिता/माताको नाम_lower'].str.startswith(_normalize_unicode(parent_nepali), na=False)
                 if spouse_filter:
-                    spouse_dev = smart_convert_to_devanagari(spouse_filter)
-                    mask &= (df['पति/पत्नीको नाम'] != '-') & df['पति/पत्नीको नाम_lower'].str.startswith(_normalize_unicode(spouse_dev), na=False)
+                    spouse_nepali = smart_convert_to_nepali(spouse_filter)
+                    mask &= (df['पति/पत्नीको नाम'] != '-') & df['पति/पत्नीको नाम_lower'].str.startswith(_normalize_unicode(spouse_nepali), na=False)
                 if gender_filter != "सबै":
                     mask &= (df['लिङ्ग'] == gender_filter)
                 
@@ -498,8 +531,8 @@ def main_app():
         
         elif search_option == "मतदाताको नामबाट खोज्नुहोस्":
             st.subheader("👤 मतदाताको नामबाट खोज्नुहोस्")
-            st.caption("🔤 नेपाली वा English मा टाइप गर्नुहोस् (Type in Nepali or English)")
-            with st.expander("📘 उदाहरण / Examples"):
+            st.caption("💡 Type in Nepali or English")
+            with st.expander("📘 Examples"):
                 st.markdown("""
                 **Nepali:** 'र' finds 'राम', 'रमेश', 'राधा'
                 
@@ -513,9 +546,8 @@ def main_app():
                 placeholder="राम or ram"
             )
             
-            # Show conversion indicator
             if search_name:
-                converted = smart_convert_to_devanagari(search_name)
+                converted = smart_convert_to_nepali(search_name)
                 show_conversion_indicator(search_name, converted)
                 
                 filtered_df = unicode_prefix_search(df, 'मतदाताको नाम', search_name)
@@ -550,7 +582,7 @@ def main_app():
                 placeholder="हरि or hari"
             )
             if search_parent:
-                show_conversion_indicator(search_parent, smart_convert_to_devanagari(search_parent))
+                show_conversion_indicator(search_parent, smart_convert_to_nepali(search_parent))
                 filtered_df = unicode_prefix_search(df, 'पिता/माताको नाम', search_parent)
                 if not filtered_df.empty:
                     if not use_print_view:
@@ -569,7 +601,7 @@ def main_app():
                 placeholder="सीता or sita"
             )
             if search_spouse:
-                show_conversion_indicator(search_spouse, smart_convert_to_devanagari(search_spouse))
+                show_conversion_indicator(search_spouse, smart_convert_to_nepali(search_spouse))
                 filtered_df = unicode_prefix_search(df, 'पति/पत्नीको नाम', search_spouse)
                 filtered_df = filtered_df[filtered_df['पति/पत्नीको नाम'] != '-']
                 if not filtered_df.empty:

@@ -3,4 +3,4 @@ pandas>=2.0.0,<3
 openpyxl>=3.1.0
 python-dotenv>=1.0.0
 extra-streamlit-components
-aksharamukha>=1.0.0
+indic-transliteration>=2.3.0
