@@ -285,13 +285,22 @@ def show_conversion_indicator(original_input: str, converted_input: str):
             unsafe_allow_html=True
         )
 
-# FIND THIS SECTION AROUND LINE 240
+with st.expander(f"🗳️ {voter_name} — नं: {voter_num} | {gender}, {age} वर्ष", expanded=False):
+            col1, col2 = st.columns([3, 1])
+
+            with col1:
+                for col in columns:
+                    if col in row.index:
+                        value = row[col] if pd.notna(row[col]) else '-'
+                        st.text(f"{col}: {value}")
+
+            # REPLACE THIS PART CAREFULLY:
             with col2:
                 voter_dict = row.to_dict()
-                receipt_text = format_voter_receipt(voter_dict)
-                download_button = _build_direct_download_button(receipt_text, voter_num, voter_name)
-                st.components.v1.html(download_button, height=120, scrolling=False)
-
+                from print_logic import generate_browser_print 
+                
+                print_html = generate_browser_print(voter_dict)
+                st.components.v1.html(print_html, height=100, scrolling=False)
 <div style="width:100%;">
 <button onclick="dlTXT()" style="
     width:100%;padding:16px 10px;border:none;border-radius:10px;cursor:pointer;
