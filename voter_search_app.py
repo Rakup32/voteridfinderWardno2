@@ -9,7 +9,7 @@ import extra_streamlit_components as stx
 from credentials import USERNAME, PASSWORD
 from print_logic import format_voter_receipt, show_print_dialog, create_print_preview
 
-# Import Aksharamukha for Roman to Devanagari conversion
+# Try to import Aksharamukha
 try:
     from aksharamukha import transliterate
     AKSHARAMUKHA_AVAILABLE = True
@@ -17,43 +17,62 @@ except ImportError:
     AKSHARAMUKHA_AVAILABLE = False
 
 # ============================================================================
-# ROMAN TO DEVANAGARI CONVERTER - NEW ADDITION
+# IMPROVED ROMAN TO DEVANAGARI CONVERTER
 # ============================================================================
 
-@st.cache_data(ttl=3600)
+# Custom mappings for common Nepali names (exact matching)
+import roman_to_nepali 
+@st.cache_data(ttl=3600, show_spinner=False)
 def roman_to_devanagari(text: str) -> str:
     """
-    Convert Roman Nepali to Devanagari Nepali.
-    Automatically detects if text is already in Devanagari and skips conversion.
+    Convert Roman Nepali to Devanagari.
+    Priority: Custom mappings > Aksharamukha ITRANS > Return as-is
     """
     if not text or not isinstance(text, str):
         return text
     
     text = text.strip()
     
-    # Check if already Devanagari (Unicode range: U+0900 to U+097F)
+    # Already Devanagari? Return as-is
     if re.search(r'[\u0900-\u097F]', text):
         return text
     
-    # Skip conversion if Aksharamukha not available
-    if not AKSHARAMUKHA_AVAILABLE:
-        return text
+    text_lower = text.lower()
     
-    # Convert Roman to Devanagari using Aksharamukha
-    try:
-        converted = transliterate.process(
-            'ISO',
-            'Devanagari',
-            text,
-            pre_options=['IgnoreVedasreni'],
-            post_options=['RemoveUnusedAnusvara']
-        )
-        return converted
-    except Exception:
-        return text
+    # Try exact match from custom mappings
+    if text_lower in COMMON_NAMES:
+        return COMMON_NAMES[text_lower]
+    
+    # Try multi-word conversion
+    words = text_lower.split()
+    if len(words) > 1:
+        converted_words = []
+        for word in words:
+            if word in COMMON_NAMES:
+                converted_words.append(COMMON_NAMES[word])
+            elif AKSHARAMUKHA_AVAILABLE:
+                try:
+                    result = transliterate.process('ITRANS', 'Devanagari', word)
+                    converted_words.append(result if result else word)
+                except:
+                    converted_words.append(word)
+            else:
+                converted_words.append(word)
+        return ' '.join(converted_words)
+    
+    # Single word - try Aksharamukha
+    if AKSHARAMUKHA_AVAILABLE:
+        try:
+            result = transliterate.process('ITRANS', 'Devanagari', text_lower)
+            return result if result else text
+        except:
+            pass
+    
+    # Fallback: return original
+    return text
 
 # ============================================================================
-# ORIGINAL CODE (UNCHANGED)
+# ORIGINAL CODE
 # ============================================================================
 
 def _normalize_unicode(s):
@@ -209,13 +228,10 @@ def get_display_columns(df):
     return final_cols
 
 def unicode_prefix_search(df, column, search_term):
-    """
-    MODIFIED: Now includes Roman to Devanagari conversion
-    """
     if not search_term or column not in df.columns:
         return df
     
-    # 🔥 NEW: Convert Roman to Devanagari
+    # Convert Roman to Devanagari
     search_term = roman_to_devanagari(search_term)
     
     normalized = _normalize_unicode(search_term)
@@ -239,8 +255,7 @@ def show_results_table_with_print(data, columns):
     st.markdown("""
     <div class="print-info-box">
         <strong>🖨️ प्रिन्ट मोड सक्रिय छ / Print Mode Active</strong><br>
-        📋 प्रत्येक मतदातामा क्लिक गर्नुहोस् र Print बटन थिच्नुहोस्।<br>
-        💡 Click on each voter card and press the Print button to view/download receipt.
+        📋 प्रत्येक मतदातामा क्लिक गर्नुहोस् र Print बटन थिच्नुहोस्।
     </div>
     """, unsafe_allow_html=True)
     
@@ -257,20 +272,18 @@ def show_results_table_with_print(data, columns):
             with col1:
                 st.markdown('<div class="voter-card">', unsafe_allow_html=True)
                 for col in columns:
-                    if col in row.index and col != 'मतदाता विवरणहरू':
+                    if col in row.index:
                         value = row[col] if pd.notna(row[col]) else '-'
                         st.text(f"{col}: {value}")
                 st.markdown('</div>', unsafe_allow_html=True)
             
             with col2:
-                if st.button("🖨️ मुद्रण गर्नुहोस्\n(Print)", key=f"print_btn_{voter_key}", use_container_width=True):
+                if st.button("🖨️ मुद्रण", key=f"print_btn_{voter_key}", use_container_width=True):
                     st.session_state.print_preview_states[voter_key] = True
                     st.rerun()
             
             if st.session_state.print_preview_states.get(voter_key, False):
                 st.markdown("---")
-                st.success("✅ **रसिद पूर्वावलोकन / Receipt Preview** — 58mm थर्मल प्रिन्टर")
-                
                 voter_dict = row.to_dict()
                 receipt_text = format_voter_receipt(voter_dict)
                 st.code(receipt_text, language=None)
@@ -278,16 +291,15 @@ def show_results_table_with_print(data, columns):
                 col_d1, col_d2 = st.columns(2)
                 with col_d1:
                     st.download_button(
-                        label="💾 रसिद डाउनलोड गर्नुहोस् (Download Receipt)",
+                        label="💾 डाउनलोड",
                         data=receipt_text,
                         file_name=f"voter_{voter_num}.txt",
                         mime="text/plain",
                         key=f"download_{voter_key}",
                         use_container_width=True
                     )
-                
                 with col_d2:
-                    if st.button("❌ बन्द गर्नुहोस् (Close)", key=f"close_{voter_key}", use_container_width=True):
+                    if st.button("❌ बन्द", key=f"close_{voter_key}", use_container_width=True):
                         st.session_state.print_preview_states[voter_key] = False
                         st.rerun()
 
@@ -302,18 +314,18 @@ def main_app():
     st.title("🗳️ मतदाता सूची खोज प्रणाली")
     st.markdown("**Voter List Search System**")
     
-    # Show Roman typing hint if Aksharamukha is available
-    if AKSHARAMUKHA_AVAILABLE:
-        st.info("💡 **Roman Typing Enabled** - Type in English (e.g., 'ram', 'krishna') and search will work!")
+    # Show Roman typing status
+    if len(COMMON_NAMES) > 0:
+        st.info(f"💡 **Roman Typing Enabled** ({len(COMMON_NAMES)} names mapped) - Type 'ram', 'pukar', 'samjhana', etc.")
     
     with st.sidebar:
-        if st.button("🚪 Logout / बाहिर निस्कनुहोस्", use_container_width=True):
+        if st.button("🚪 Logout", use_container_width=True):
             logout()
     
     st.markdown("---")
     
     try:
-        with st.spinner('डाटा लोड गर्दै... / Loading data...'):
+        with st.spinner('Loading...'):
             df = load_data()
 
         display_columns = get_display_columns(df)
@@ -325,27 +337,22 @@ def main_app():
         st.sidebar.header("खोज विकल्प")
         
         st.sidebar.markdown("---")
-        st.sidebar.subheader("प्रदर्शन मोड / Display Mode")
+        st.sidebar.subheader("प्रदर्शन मोड")
         display_mode = st.sidebar.radio(
-            "मोड छान्नुहोस् / Select Mode:",
-            ["📋 Table View (तालिका)", "🖨️ Print View (प्रिन्ट)"],
-            index=0,
-            help="Table View: सबै मतदाता एकै पटक हेर्नुहोस् | Print View: प्रत्येक मतदाता प्रिन्ट गर्न सकिन्छ"
+            "मोड:",
+            ["📋 Table View", "🖨️ Print View"],
+            index=0
         )
-        use_print_view = (display_mode == "🖨️ Print View (प्रिन्ट)")
-        
-        if use_print_view:
-            st.sidebar.info("🖨️ **Print Mode Active**\n\nप्रत्येक मतदातामा Print बटन देखिनेछ।\nEach voter will have a Print button.")
+        use_print_view = (display_mode == "🖨️ Print View")
         
         st.sidebar.markdown("---")
         
-        default_index = 7
         search_option = st.sidebar.selectbox(
-            "खोज प्रकार छान्नुहोस्:",
+            "खोज प्रकार:",
             ["सबै डाटा हेर्नुहोस्", "मतदाताको नामबाट खोज्नुहोस्", "मतदाता नंबरबाट खोज्नुहोस्", 
              "पिता/माताको नामबाट खोज्नुहोस्", "पति/पत्नीको नामबाट खोज्नुहोस्",
              "लिङ्गबाट फिल्टर गर्नुहोस्", "उमेर दायराबाट खोज्नुहोस्", "उन्नत खोज (सबै फिल्टर)"],
-            index=default_index
+            index=7
         )
         
         def display_results(filtered_df, display_cols):
@@ -358,71 +365,67 @@ def main_app():
             st.subheader("सम्पूर्ण मतदाता सूची")
             display_results(df, display_columns)
             if not use_print_view:
-                st.info(f"कुल मतदाता संख्या: {len(df):,}")
+                st.info(f"कुल: {len(df):,}")
         
         elif search_option == "मतदाताको नामबाट खोज्नुहोस्":
             st.subheader("मतदाताको नामबाट खोज्नुहोस्")
-            st.caption("🔤 उपसर्ग खोज / Prefix search (Type in Nepali or Roman)")
-            with st.expander("📘 उदाहरण / Examples"):
-                st.markdown("**Nepali:** 'र' finds 'राम', 'रमेश'")
-                st.markdown("**Roman:** 'ram' finds 'राम', 'रामेश'")
+            st.caption("Type in Nepali or Roman (ram, pukar, samjhana)")
             
-            search_name = st.text_input("मतदाताको नाम लेख्नुहोस्:", "", key="name_search")
+            search_name = st.text_input("नाम:", "", key="name_search")
             if search_name:
                 filtered_df = unicode_prefix_search(df, 'मतदाताको नाम', search_name)
                 if not filtered_df.empty:
                     if not use_print_view:
-                        st.success(f"✅ {len(filtered_df):,} मतदाता भेटियो")
+                        st.success(f"✅ {len(filtered_df):,} found")
                     display_results(filtered_df, display_columns)
                 else:
-                    st.warning("कुनै पनि मतदाता भेटिएन")
+                    st.warning("Not found")
         
         elif search_option == "मतदाता नंबरबाट खोज्नुहोस्":
             st.subheader("मतदाता नंबरबाट खोज्नुहोस्")
-            search_number = st.text_input("मतदाता नंबर लेख्नुहोस्:", "")
+            search_number = st.text_input("नंबर:", "")
             if search_number:
                 try:
                     filtered_df = df[df['मतदाता नं'] == int(search_number)]
                     if not filtered_df.empty:
-                        st.success("✅ मतदाता भेटियो")
+                        st.success("✅ Found")
                         display_results(filtered_df, display_columns)
                     else:
-                        st.warning("कुनै पनि मतदाता भेटिएन")
+                        st.warning("Not found")
                 except ValueError:
                     st.error("Invalid number")
 
         elif search_option == "पिता/माताको नामबाट खोज्नुहोस्":
             st.subheader("पिता/माताको नामबाट खोज्नुहोस्")
-            st.caption("Type in Nepali or Roman")
-            search_parent = st.text_input("पिता वा माताको नाम:", "", key="parent_search")
+            st.caption("Nepali or Roman")
+            search_parent = st.text_input("नाम:", "", key="parent_search")
             if search_parent:
                 filtered_df = unicode_prefix_search(df, 'पिता/माताको नाम', search_parent)
                 if not filtered_df.empty:
                     if not use_print_view:
-                        st.success(f"✅ {len(filtered_df):,} भेटियो")
+                        st.success(f"✅ {len(filtered_df):,}")
                     display_results(filtered_df, display_columns)
                 else:
-                    st.warning("भेटिएन")
+                    st.warning("Not found")
 
         elif search_option == "पति/पत्नीको नामबाट खोज्नुहोस्":
             st.subheader("पति/पत्नीको नामबाट खोज्नुहोस्")
-            st.caption("Type in Nepali or Roman")
-            search_spouse = st.text_input("पति वा पत्नीको नाम:", "", key="spouse_search")
+            search_spouse = st.text_input("नाम:", "", key="spouse_search")
             if search_spouse:
                 filtered_df = unicode_prefix_search(df, 'पति/पत्नीको नाम', search_spouse)
                 filtered_df = filtered_df[filtered_df['पति/पत्नीको नाम'] != '-']
                 if not filtered_df.empty:
                     if not use_print_view:
-                        st.success(f"✅ {len(filtered_df):,} भेटियो")
+                        st.success(f"✅ {len(filtered_df):,}")
                     display_results(filtered_df, display_columns)
                 else:
-                    st.warning("भेटिएन")
+                    st.warning("Not found")
 
         elif search_option == "लिङ्गबाट फिल्टर गर्नुहोस्":
-            st.subheader("लिङ्गबाट फिल्टर गर्नुहोस्")
+            st.subheader("लिङ्गबाट फिल्टर")
             unique_genders = [g for g in df['लिङ्ग'].unique().tolist() if pd.notna(g)]
             gender_options = ["सबै"] + list(set(unique_genders + ["पुरुष", "महिला"]))
-            selected_gender = st.selectbox("लिङ्ग छान्नुहोस्:", gender_options)
+            selected_gender = st.selectbox("लिङ्ग:", gender_options)
             
             if selected_gender == "सबै":
                 filtered_df = df
@@ -430,31 +433,31 @@ def main_app():
                 filtered_df = df[df['लिङ्ग'] == selected_gender]
             
             if not use_print_view:
-                st.success(f"✅ {len(filtered_df):,} मतदाता भेटियो")
+                st.success(f"✅ {len(filtered_df):,}")
             display_results(filtered_df, display_columns)
 
         elif search_option == "उमेर दायराबाट खोज्नुहोस्":
-            st.subheader("उमेर दायराबाट खोज्नुहोस्")
+            st.subheader("उमेर दायरा")
             c1, c2 = st.columns(2)
-            min_age = c1.number_input("न्यूनतम:", value=18)
-            max_age = c2.number_input("अधिकतम:", value=100)
+            min_age = c1.number_input("Min:", value=18)
+            max_age = c2.number_input("Max:", value=100)
             
             age_ok = df['उमेर(वर्ष)'].notna()
             in_range = (df['उमेर(वर्ष)'] >= min_age) & (df['उमेर(वर्ष)'] <= max_age)
             filtered_df = df[age_ok & in_range]
             
             if not use_print_view:
-                st.success(f"✅ {len(filtered_df):,} मतदाता भेटियो")
+                st.success(f"✅ {len(filtered_df):,}")
             display_results(filtered_df, display_columns)
 
         elif search_option == "उन्नत खोज (सबै फिल्टर)":
             st.subheader("🔍 उन्नत खोज")
-            st.caption("All name fields support Roman typing")
+            st.caption("All fields support Roman typing")
             col1, col2 = st.columns(2)
             with col1:
-                name_filter = st.text_input("मतदाताको नाम:", key="adv_name")
-                parent_filter = st.text_input("पिता/माताको नाम:", key="adv_parent")
-                spouse_filter = st.text_input("पति/पत्नीको नाम:", key="adv_spouse")
+                name_filter = st.text_input("मतदाता:", key="adv_name")
+                parent_filter = st.text_input("पिता/माता:", key="adv_parent")
+                spouse_filter = st.text_input("पति/पत्नी:", key="adv_spouse")
             with col2:
                 genders = ["सबै"] + list(set([g for g in df['लिङ्ग'].unique().tolist() if pd.notna(g)] + ["पुरुष", "महिला"]))
                 gender_filter = st.selectbox("लिङ्ग:", genders, key="adv_gender")
@@ -462,18 +465,15 @@ def main_app():
                 min_age_filter = ac1.number_input("Min Age:", value=0, key="adv_min")
                 max_age_filter = ac2.number_input("Max Age:", value=150, key="adv_max")
 
-            if st.button("🔍 खोज्नुहोस्", type="primary"):
+            if st.button("🔍 Search", type="primary"):
                 mask = pd.Series([True] * len(df), index=df.index)
                 if name_filter:
-                    # 🔥 NEW: Convert Roman to Devanagari
                     name_filter = roman_to_devanagari(name_filter)
                     mask &= df['मतदाताको नाम_lower'].str.startswith(_normalize_unicode(name_filter), na=False)
                 if parent_filter:
-                    # 🔥 NEW: Convert Roman to Devanagari
                     parent_filter = roman_to_devanagari(parent_filter)
                     mask &= df['पिता/माताको नाम_lower'].str.startswith(_normalize_unicode(parent_filter), na=False)
                 if spouse_filter:
-                    # 🔥 NEW: Convert Roman to Devanagari
                     spouse_filter = roman_to_devanagari(spouse_filter)
                     mask &= (df['पति/पत्नीको नाम'] != '-') & df['पति/पत्नीको नाम_lower'].str.startswith(_normalize_unicode(spouse_filter), na=False)
                 if gender_filter != "सबै":
@@ -487,33 +487,33 @@ def main_app():
                 st.markdown("---")
                 if not filtered_df.empty:
                     if not use_print_view:
-                        st.success(f"✅ {len(filtered_df):,} मतदाता भेटियो")
+                        st.success(f"✅ {len(filtered_df):,}")
                     display_results(filtered_df, display_columns)
                 else:
-                    st.warning("कुनै पनि मतदाता भेटिएन")
+                    st.warning("Not found")
 
         st.sidebar.markdown("---")
         st.sidebar.subheader("तथ्याङ्क")
-        st.sidebar.metric("कुल मतदाता", f"{len(df):,}")
+        st.sidebar.metric("कुल", f"{len(df):,}")
         
         if 'उमेर(वर्ष)' in df.columns:
             genz_voters = df[(df['उमेर(वर्ष)'] >= 18) & (df['उमेर(वर्ष)'] <= 29)]
-            st.sidebar.metric("Gen Z (18-29 वर्ष)", f"{len(genz_voters):,}")
+            st.sidebar.metric("Gen Z (18-29)", f"{len(genz_voters):,}")
         
         if 'लिङ्ग' in df.columns:
-            st.sidebar.write("लिङ्ग अनुसार:")
+            st.sidebar.write("लिङ्ग:")
             gender_counts = df['लिङ्ग'].value_counts()
             for gender, count in gender_counts.items():
                 st.sidebar.write(f"- {gender}: {count:,}")
         
         if 'उमेर(वर्ष)' in df.columns:
             avg_age = df['उमेर(वर्ष)'].dropna().mean()
-            st.sidebar.metric("औसत उमेर", f"{avg_age:.1f} वर्ष" if not pd.isna(avg_age) else "—")
+            st.sidebar.metric("औसत उमेर", f"{avg_age:.1f}" if not pd.isna(avg_age) else "—")
 
     except FileNotFoundError:
         st.error("voterlist.xlsx not found.")
     except Exception as e:
-        logger.exception("App error")
+        logger.exception("Error")
         st.error(f"Error: {str(e)}")
     
     st.markdown("---")
