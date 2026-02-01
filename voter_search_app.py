@@ -285,13 +285,13 @@ def show_conversion_indicator(original_input: str, converted_input: str):
             unsafe_allow_html=True
         )
 
-def _build_direct_download_button(receipt_text, voter_num, voter_name):
-    """Simple button that directly downloads TXT for thermal printer."""
-    import json
-    receipt_js = json.dumps(receipt_text)
-    voter_num_js = json.dumps(str(voter_num))
+# FIND THIS SECTION AROUND LINE 240
+            with col2:
+                voter_dict = row.to_dict()
+                receipt_text = format_voter_receipt(voter_dict)
+                download_button = _build_direct_download_button(receipt_text, voter_num, voter_name)
+                st.components.v1.html(download_button, height=120, scrolling=False)
 
-    return f"""
 <div style="width:100%;">
 <button onclick="dlTXT()" style="
     width:100%;padding:16px 10px;border:none;border-radius:10px;cursor:pointer;
