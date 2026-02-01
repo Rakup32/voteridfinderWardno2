@@ -301,26 +301,6 @@ with st.expander(f"🗳️ {voter_name} — नं: {voter_num} | {gender}, {age
                 
                 print_html = generate_browser_print(voter_dict)
                 st.components.v1.html(print_html, height=100, scrolling=False)
-<div style="width:100%;">
-<button onclick="dlTXT()" style="
-    width:100%;padding:16px 10px;border:none;border-radius:10px;cursor:pointer;
-    background:linear-gradient(135deg,#38b2ac 0%,#319795 100%);
-    color:#fff;font-size:16px;font-weight:600;line-height:1.5;
-    transition:all .3s ease;box-shadow: 0 4px 15px rgba(56, 178, 172, 0.3);
-  " onmouseover="this.style.transform='translateY(-3px)';this.style.boxShadow='0 8px 20px rgba(56,178,172,.5)'"
-  onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='0 4px 15px rgba(56,178,172,.3)'">
-  💾 थर्मल प्रिन्टरको लागि डाउनलोड गर्नुहोस्<br>
-  <span style="font-size:14px;opacity:.9;font-weight:500">(Download TXT for Thermal Printer)</span>
-</button>
-
-<div id="successMsg_{voter_num}" style="
-    display:none;
-    background:linear-gradient(135deg,#48bb78 0%,#38a169 100%);
-    color:white;padding:12px;border-radius:8px;margin-top:10px;
-    text-align:center;font-weight:600;font-size:14px;
-    animation:successFade .3s ease;">
-    ✅ डाउनलोड सफल भयो! (Download Successful!)
-</div>
 
 <script>
 (function(){{
