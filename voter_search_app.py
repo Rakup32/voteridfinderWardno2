@@ -343,30 +343,72 @@ def _build_direct_download_button(receipt_text, voter_num, voter_name):
 </div>
 """
 
-def print_receipt_qz(printer_name, html_content, voter_num):
+def create_qz_print_button(voter_num, html_content, voter_name):
     """
-    Print HTML receipt using QZ Tray with auto-cut support.
+    Create an HTML button with embedded QZ Tray printing functionality.
+    This avoids Streamlit page reloads.
     
     Parameters:
     -----------
-    printer_name : str
-        Name of the printer (e.g., 'zkteco')
-    html_content : str
-        HTML content to print
     voter_num : int/str
         Voter number for identification
-    """
-    # Escape HTML for JavaScript
-    escaped_html = html_content.replace('\\', '\\\\').replace('`', '\\`').replace('$', '\\$').replace('\n', ' ')
+    html_content : str
+        HTML content to print
+    voter_name : str
+        Voter name for display
     
-    qz_js = f"""
-    <div id="qz-status-{voter_num}" style="padding: 12px; border-radius: 8px; margin: 8px 0; font-size: 13px; line-height: 1.4;"></div>
+    Returns:
+    --------
+    str : Complete HTML with button and QZ Tray printing logic
+    """
+    # Escape HTML for JavaScript - more thorough escaping
+    escaped_html = (html_content
+                    .replace('\\', '\\\\')
+                    .replace('`', '\\`')
+                    .replace('$', '\\$')
+                    .replace('\n', ' ')
+                    .replace('\r', '')
+                    .replace('"', '\\"'))
+    
+    html = f"""
+    <div style="width: 100%; padding: 8px;">
+        <!-- Print Button -->
+        <button id="printBtn_{voter_num}" onclick="printReceipt_{voter_num}()" style="
+            width: 100%;
+            padding: 14px 16px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+            margin-bottom: 10px;
+        " onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 20px rgba(102,126,234,.5)'"
+           onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='0 4px 15px rgba(102,126,234,.3)'">
+            🖨️ Print Slip<br>
+            <span style="font-size: 12px; opacity: 0.9; font-weight: 500;">(Direct Thermal Print)</span>
+        </button>
+        
+        <!-- Status Display -->
+        <div id="status_{voter_num}" style="
+            padding: 10px;
+            border-radius: 6px;
+            font-size: 12px;
+            line-height: 1.4;
+            display: none;
+            margin-top: 8px;
+        "></div>
+    </div>
     
     <script src="https://cdn.jsdelivr.net/npm/qz-tray@2.2.3/qz-tray.min.js"></script>
     
     <script>
     (function() {{
-        const statusDiv = document.getElementById('qz-status-{voter_num}');
+        const statusDiv = document.getElementById('status_{voter_num}');
+        const printBtn = document.getElementById('printBtn_{voter_num}');
         
         function updateStatus(message, type = 'info') {{
             const colors = {{
@@ -375,39 +417,50 @@ def print_receipt_qz(printer_name, html_content, voter_num):
                 'error': '#e53e3e',
                 'warning': '#d69e2e'
             }};
+            statusDiv.style.display = 'block';
             statusDiv.style.background = colors[type] + '22';
             statusDiv.style.border = '2px solid ' + colors[type];
             statusDiv.style.color = colors[type];
             statusDiv.innerHTML = message;
         }}
         
-        async function printToQZ() {{
+        window.printReceipt_{voter_num} = async function() {{
             try {{
-                updateStatus('🔌 QZ Tray मा जडान गर्दै... / Connecting to QZ Tray...', 'info');
+                // Disable button during printing
+                printBtn.disabled = true;
+                printBtn.style.opacity = '0.6';
+                printBtn.style.cursor = 'not-allowed';
+                
+                updateStatus('🔌 QZ Tray मा जडान गर्दै...<br>Connecting to QZ Tray...', 'info');
                 
                 // Connect to QZ Tray
-                await qz.websocket.connect();
-                updateStatus('✅ QZ Tray जडान भयो / Connected', 'success');
+                if (!qz.websocket.isActive()) {{
+                    await qz.websocket.connect();
+                }}
+                updateStatus('✅ जडान भयो / Connected', 'success');
                 
                 // Find printer
                 const printers = await qz.printers.find();
                 console.log('Available printers:', printers);
                 
                 let targetPrinter = printers.find(p => 
-                    p.toLowerCase().includes('{printer_name}'.toLowerCase())
+                    p.toLowerCase().includes('zkteco')
                 );
                 
                 if (!targetPrinter) {{
                     targetPrinter = printers[0];
-                    updateStatus(`⚠️ प्रिन्टर "{printer_name}" भेटिएन। प्रयोग गर्दै: ${{targetPrinter}}`, 'warning');
+                    updateStatus(`⚠️ "zkteco" भेटिएन। प्रयोग गर्दै:<br>${{targetPrinter}}`, 'warning');
+                    await new Promise(resolve => setTimeout(resolve, 1500));
                 }} else {{
-                    updateStatus(`🖨️ प्रिन्टर भेटियो / Found: ${{targetPrinter}}`, 'success');
+                    updateStatus(`🖨️ प्रिन्टर भेटियो<br>Found: ${{targetPrinter}}`, 'success');
+                    await new Promise(resolve => setTimeout(resolve, 800));
                 }}
                 
-                // Prepare print data with auto-cut
+                // Prepare print configuration
                 const config = qz.configs.create(targetPrinter);
                 
-                const htmlData = `{escaped_html}`;
+                // HTML receipt data
+                const htmlData = "{escaped_html}";
                 
                 // ESC/POS auto-cut command
                 const cutCommand = '\\x1B\\x69';  // ESC i - Full cut
@@ -426,41 +479,44 @@ def print_receipt_qz(printer_name, html_content, voter_num):
                     }}
                 ];
                 
-                updateStatus('🖨️ प्रिन्ट गर्दै... / Printing...', 'info');
+                updateStatus('🖨️ प्रिन्ट गर्दै...<br>Printing...', 'info');
                 await qz.print(config, printData);
                 
-                updateStatus('✅ प्रिन्ट सफल! कागज काटिनेछ। / Print successful! Paper will auto-cut.', 'success');
+                updateStatus('✅ प्रिन्ट सफल! कागज काटिनेछ।<br>Print successful! Paper will auto-cut.', 'success');
                 
-                // Disconnect after 2 seconds
-                setTimeout(async () => {{
-                    await qz.websocket.disconnect();
-                    updateStatus('✅ प्रिन्ट पूरा भयो। / Print completed.', 'success');
-                }}, 2000);
+                // Re-enable button after 3 seconds
+                setTimeout(() => {{
+                    printBtn.disabled = false;
+                    printBtn.style.opacity = '1';
+                    printBtn.style.cursor = 'pointer';
+                    statusDiv.style.display = 'none';
+                }}, 3000);
                 
             }} catch (err) {{
                 console.error('QZ Tray Error:', err);
-                let errorMsg = '❌ प्रिन्ट त्रुटि / Print Error: ';
+                let errorMsg = '❌ प्रिन्ट त्रुटि / Print Error:<br>';
                 
                 if (err.message && err.message.includes('Unable to establish connection')) {{
-                    errorMsg += 'QZ Tray चालू छैन। कृपया QZ Tray सुरु गर्नुहोस्। / QZ Tray is not running. Please start QZ Tray.';
+                    errorMsg += 'QZ Tray चालू छैन।<br>QZ Tray is not running.<br><strong>Please start QZ Tray first!</strong>';
                 }} else if (err.message && err.message.includes('Unable to find')) {{
-                    errorMsg += 'प्रिन्टर भेटिएन। / Printer not found.';
+                    errorMsg += 'प्रिन्टर भेटिएन।<br>Printer not found.<br>Check printer is ON.';
                 }} else {{
                     errorMsg += err.message || 'Unknown error';
                 }}
                 
                 updateStatus(errorMsg, 'error');
+                
+                // Re-enable button
+                printBtn.disabled = false;
+                printBtn.style.opacity = '1';
+                printBtn.style.cursor = 'pointer';
             }}
-        }}
-        
-        // Auto-start printing
-        printToQZ();
+        }};
     }})();
     </script>
     """
     
-    # Display in Streamlit
-    st.components.v1.html(qz_js, height=90, scrolling=False)
+    return html
 
 
 def show_results_table_with_print(data, columns):
@@ -499,10 +555,9 @@ def show_results_table_with_print(data, columns):
                 # Generate HTML receipt for QZ Tray
                 html_receipt = format_voter_receipt_html(voter_dict)
                 
-                # Print Slip button with QZ Tray
-                if st.button("🖨️ Print Slip", key=f"print_qz_{idx}_{voter_num}", use_container_width=True):
-                    with st.spinner("Printing..."):
-                        print_receipt_qz('zkteco', html_receipt, voter_num)
+                # Print Slip button using HTML/JavaScript (no page reload)
+                print_button_html = create_qz_print_button(voter_num, html_receipt, voter_name)
+                st.components.v1.html(print_button_html, height=180, scrolling=False)
                 
                 st.markdown("---")
                 
