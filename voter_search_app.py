@@ -345,8 +345,8 @@ def _build_direct_download_button(receipt_text, voter_num, voter_name):
 
 def create_qz_print_button_image(voter_num, html_content):
     """
-    Create print button using IMAGE/PIXEL mode - renders HTML as image.
-    This is the MOST RELIABLE method for Nepali text printing.
+    Create print button using IMAGE mode with chunked data transmission.
+    Avoids Malformed URL by splitting data into smaller pieces.
     
     Parameters:
     -----------
@@ -355,11 +355,16 @@ def create_qz_print_button_image(voter_num, html_content):
     html_content : str
         HTML content to render as image
     """
-    import base64
+    # Simplify HTML - remove all extra whitespace and newlines
+    import re
+    html_clean = re.sub(r'\s+', ' ', html_content).strip()
     
-    # Encode HTML as base64
-    html_bytes = html_content.encode('utf-8')
-    html_base64 = base64.b64encode(html_bytes).decode('ascii')
+    # Split into chunks to avoid URL length limits
+    chunk_size = 1000
+    chunks = [html_clean[i:i+chunk_size] for i in range(0, len(html_clean), chunk_size)]
+    
+    # Create JavaScript array of chunks
+    chunks_js = str(chunks).replace("'", '"')
     
     html = f"""
     <div style="width: 100%; padding: 8px;">
@@ -395,7 +400,10 @@ def create_qz_print_button_image(voter_num, html_content):
     
     <script>
     (function() {{
-        const htmlBase64 = "{html_base64}";
+        // Reconstruct HTML from chunks
+        const htmlChunks = {chunks_js};
+        const htmlContent = htmlChunks.join('');
+        
         const statusDiv = document.getElementById('status_{voter_num}');
         const printBtn = document.getElementById('printBtn_{voter_num}');
         
@@ -424,14 +432,13 @@ def create_qz_print_button_image(voter_num, html_content):
                 const printers = await qz.printers.find();
                 let printer = printers.find(p => p.toLowerCase().includes('zkteco')) || printers[0];
                 
-                updateStatus('🖨️ Preparing image...', 'info');
+                updateStatus('🖨️ Rendering...', 'info');
                 
-                // Decode base64 to get HTML
-                const htmlContent = decodeURIComponent(escape(atob(htmlBase64)));
+                const config = qz.configs.create(printer, {{
+                    units: 'mm'
+                }});
                 
-                const config = qz.configs.create(printer);
-                
-                // Use pixel/image mode for perfect Nepali rendering
+                // Use pixel mode with the HTML content
                 const printData = [
                     {{
                         type: 'pixel',
@@ -442,7 +449,7 @@ def create_qz_print_button_image(voter_num, html_content):
                     {{
                         type: 'raw',
                         format: 'command',
-                        data: '\\x1D\\x56\\x00'  // Full cut
+                        data: '\\x1D\\x56\\x00'
                     }}
                 ];
                 
@@ -458,14 +465,53 @@ def create_qz_print_button_image(voter_num, html_content):
                 }}, 3000);
                 
             }} catch (err) {{
-                console.error(err);
+                console.error('Print Error:', err);
                 let msg = '❌ Error: ';
-                if (err.message.includes('establish')) msg += 'Start QZ Tray!';
-                else if (err.message.includes('find')) msg += 'Turn ON printer';
-                else msg += err.message.substring(0, 50);
+                if (err.message.includes('establish')) {{
+                    msg += 'Start QZ Tray!';
+                }} else if (err.message.includes('find')) {{
+                    msg += 'Turn ON printer';
+                }} else if (err.message.includes('Malformed')) {{
+                    msg += 'HTML issue. Using backup...';
+                    // Try simple text fallback
+                    setTimeout(() => window.printReceipt_{voter_num}_fallback(), 1000);
+                }} else {{
+                    msg += err.message.substring(0, 40);
+                }}
                 updateStatus(msg, 'error');
                 printBtn.disabled = false;
                 printBtn.style.opacity = '1';
+            }}
+        }};
+        
+        // Fallback to simple text if image mode fails
+        window.printReceipt_{voter_num}_fallback = async function() {{
+            try {{
+                updateStatus('🔄 Trying text mode...', 'warning');
+                
+                const printers = await qz.printers.find();
+                let printer = printers.find(p => p.toLowerCase().includes('zkteco')) || printers[0];
+                
+                const config = qz.configs.create(printer);
+                
+                // Extract text from HTML
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = htmlContent;
+                const textContent = tempDiv.textContent || tempDiv.innerText;
+                
+                await qz.print(config, [{{
+                    type: 'raw',
+                    format: 'plain',
+                    data: textContent
+                }}, {{
+                    type: 'raw',
+                    format: 'command',
+                    data: '\\x1D\\x56\\x00'
+                }}]);
+                
+                updateStatus('✅ Printed (text mode)', 'success');
+            }} catch (err) {{
+                updateStatus('❌ Print failed: ' + err.message.substring(0, 30), 'error');
             }}
         }};
     }})();

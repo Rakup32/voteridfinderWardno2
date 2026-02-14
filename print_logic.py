@@ -282,23 +282,23 @@ def format_compact_receipt(voter_data):
 
 def format_voter_receipt_html(voter_data):
     """
-    Format voter data as HTML for QZ Tray pixel printing (80mm thermal printer).
-    Image mode ensures perfect Nepali character rendering.
+    Format voter data as MINIMAL HTML for QZ Tray pixel printing.
+    Ultra-simple to avoid Malformed URL errors.
     
     Parameters:
     -----------
     voter_data : dict
-        Dictionary containing voter information with Nepali column names
+        Dictionary containing voter information
     
     Returns:
     --------
-    str : HTML string ready for QZ Tray pixel printing
+    str : Minimal HTML string
     """
     
-    # Get current timestamp
+    # Get timestamp
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
     
-    # Extract voter data with safe defaults
+    # Extract data
     serial_no = voter_data.get('सि.नं.', 'N/A')
     voter_no = voter_data.get('मतदाता नं', 'N/A')
     voter_name = normalize_text(voter_data.get('मतदाताको नाम', 'N/A'))
@@ -307,90 +307,33 @@ def format_voter_receipt_html(voter_data):
     parent_name = normalize_text(voter_data.get('पिता/माताको नाम', 'N/A'))
     spouse_name = voter_data.get('पति/पत्नीको नाम', '')
     
-    # Build spouse row only if exists
+    # Spouse row
     spouse_row = ""
     if spouse_name and spouse_name.strip() and spouse_name.strip() != '-':
         spouse_name = normalize_text(spouse_name)
-        spouse_row = f"<div class='info'><b>पति/पत्नी:</b> {spouse_name}</div>"
+        spouse_row = f"<div><b>पति/पत्नी:</b> {spouse_name}</div>"
     
-    # Create clean HTML optimized for image rendering
+    # Ultra-minimal HTML
     html = f"""<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8">
-<style>
-body {{
-    width: 70mm;
-    font-family: Arial, sans-serif;
-    font-size: 11pt;
-    margin: 0;
-    padding: 4mm;
-    background: white;
-    color: black;
-}}
-.center {{
-    text-align: center;
-}}
-.header {{
-    border-bottom: 2px solid #000;
-    padding-bottom: 2mm;
-    margin-bottom: 3mm;
-}}
-.serial {{
-    font-size: 14pt;
-    font-weight: bold;
-    text-align: center;
-    padding: 2mm 0;
-    background: #f0f0f0;
-    border: 2px solid #000;
-    margin: 2mm 0;
-}}
-.voter-no {{
-    font-size: 15pt;
-    font-weight: bold;
-    text-align: center;
-    padding: 2mm 0;
-    border-top: 1px dashed #666;
-    border-bottom: 1px dashed #666;
-    margin: 2mm 0;
-}}
-.info {{
-    margin: 1.5mm 0;
-    line-height: 1.4;
-}}
-.info b {{
-    font-weight: bold;
-}}
-.footer {{
-    margin-top: 4mm;
-    padding-top: 2mm;
-    border-top: 1px solid #666;
-    text-align: center;
-    font-size: 9pt;
-}}
-</style>
-</head>
-<body>
-<div class="header center">
-<div style="font-size:14pt;font-weight:bold;">मतदाता विवरण</div>
-<div>VOTER DETAILS</div>
-</div>
-
-<div class="serial">सि.नं.: {serial_no}</div>
-
-<div class="voter-no">मतदाता नं: {voter_no}</div>
-
-<div class="info"><b>नाम:</b> {voter_name}</div>
-<div class="info"><b>उमेर:</b> {age} वर्ष | <b>लिङ्ग:</b> {gender}</div>
-<div class="info"><b>पिता/माता:</b> {parent_name}</div>
+<html><head><meta charset="UTF-8"><style>
+body{{width:70mm;font-family:Arial;font-size:11pt;margin:0;padding:4mm;background:white;color:black}}
+.c{{text-align:center}}
+.h{{border-bottom:2px solid #000;padding-bottom:2mm;margin-bottom:3mm}}
+.s{{font-size:14pt;font-weight:bold;text-align:center;padding:2mm 0;background:#f0f0f0;border:2px solid #000;margin:2mm 0}}
+.v{{font-size:15pt;font-weight:bold;text-align:center;padding:2mm 0;border-top:1px dashed #666;border-bottom:1px dashed #666;margin:2mm 0}}
+.i{{margin:1.5mm 0;line-height:1.4}}
+.f{{margin-top:4mm;padding-top:2mm;border-top:1px solid #666;text-align:center;font-size:9pt}}
+b{{font-weight:bold}}
+</style></head><body>
+<div class="h c"><div style="font-size:14pt;font-weight:bold">मतदाता विवरण</div><div>VOTER DETAILS</div></div>
+<div class="s">सि.नं.: {serial_no}</div>
+<div class="v">मतदाता नं: {voter_no}</div>
+<div class="i"><b>नाम:</b> {voter_name}</div>
+<div class="i"><b>उमेर:</b> {age} वर्ष | <b>लिङ्ग:</b> {gender}</div>
+<div class="i"><b>पिता/माता:</b> {parent_name}</div>
 {spouse_row}
-
-<div class="footer">
-<div>{timestamp}</div>
-<div>धन्यवाद / Thank You</div>
-</div>
-</body>
-</html>"""
+<div class="f"><div>{timestamp}</div><div>धन्यवाद / Thank You</div></div>
+</body></html>"""
     
     return html
 
