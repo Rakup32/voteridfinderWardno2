@@ -1230,7 +1230,7 @@ Examples:
             st.sidebar.metric("औसत उमेर / Avg Age", f"{avg_age:.1f} वर्ष" if not pd.isna(avg_age) else "—")
 
     except FileNotFoundError:
-        st.error("❌ @voterlist.xlsx not found. Please upload the file.")
+        st.error("❌ voterlist.xlsx not found. Please upload the file.")
     except Exception as e:
         logger.exception("App error")
         st.error(f"❌ Error: {str(e)}")
