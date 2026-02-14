@@ -280,6 +280,175 @@ def format_compact_receipt(voter_data):
     return '\n'.join(lines)
 
 
+def format_voter_receipt_html(voter_data):
+    """
+    Format voter data as HTML for QZ Tray pixel printing (80mm thermal printer).
+    Optimized for minimal paper usage with auto-cut support.
+    
+    Parameters:
+    -----------
+    voter_data : dict
+        Dictionary containing voter information with Nepali column names
+    
+    Returns:
+    --------
+    str : HTML string ready for QZ Tray pixel printing
+    """
+    
+    # Get current timestamp
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    # Extract voter data with safe defaults
+    voter_no = voter_data.get('मतदाता नं', 'N/A')
+    voter_name = normalize_text(voter_data.get('मतदाताको नाम', 'N/A'))
+    age = voter_data.get('उमेर(वर्ष)', 'N/A')
+    gender = voter_data.get('लिङ्ग', 'N/A')
+    parent_name = normalize_text(voter_data.get('पिता/माताको नाम', 'N/A'))
+    spouse_name = voter_data.get('पति/पत्नीको नाम', '')
+    
+    # Build spouse section only if exists and not empty/dash
+    spouse_section = ""
+    if spouse_name and spouse_name.strip() and spouse_name.strip() != '-':
+        spouse_name = normalize_text(spouse_name)
+        spouse_section = f"""
+        <tr>
+            <td class="label">पति/पत्नी:</td>
+            <td class="value">{spouse_name}</td>
+        </tr>
+        """
+    
+    # Create minimal HTML with optimized spacing
+    html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <style>
+            @page {{
+                margin: 0;
+                size: 72mm auto;
+            }}
+            * {{
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }}
+            body {{
+                width: 72mm;
+                font-family: Arial, sans-serif;
+                font-size: 11pt;
+                line-height: 1.3;
+                color: #000;
+                padding: 3mm 4mm;
+                background: white;
+            }}
+            .header {{
+                text-align: center;
+                border-bottom: 2px solid #000;
+                padding-bottom: 2mm;
+                margin-bottom: 3mm;
+            }}
+            .header h1 {{
+                font-size: 14pt;
+                font-weight: bold;
+                margin-bottom: 1mm;
+            }}
+            .header h2 {{
+                font-size: 11pt;
+                font-weight: normal;
+            }}
+            .voter-no {{
+                text-align: center;
+                font-size: 16pt;
+                font-weight: bold;
+                padding: 2mm 0;
+                margin: 2mm 0;
+                border-top: 1px dashed #666;
+                border-bottom: 1px dashed #666;
+            }}
+            table {{
+                width: 100%;
+                border-collapse: collapse;
+                margin: 2mm 0;
+            }}
+            td {{
+                padding: 1.5mm 0;
+                vertical-align: top;
+            }}
+            .label {{
+                font-weight: bold;
+                width: 35%;
+                font-size: 10pt;
+            }}
+            .value {{
+                width: 65%;
+                font-size: 10pt;
+                word-wrap: break-word;
+            }}
+            .footer {{
+                margin-top: 3mm;
+                padding-top: 2mm;
+                border-top: 1px solid #666;
+                font-size: 9pt;
+                text-align: center;
+            }}
+            .signature {{
+                margin-top: 4mm;
+                padding-top: 10mm;
+                border-top: 1px solid #000;
+                text-align: center;
+                font-size: 9pt;
+            }}
+            .timestamp {{
+                font-size: 8pt;
+                color: #666;
+                margin-top: 1mm;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <h1>मतदाता विवरण</h1>
+            <h2>VOTER DETAILS</h2>
+        </div>
+        
+        <div class="voter-no">मतदाता नं: {voter_no}</div>
+        
+        <table>
+            <tr>
+                <td class="label">नाम:</td>
+                <td class="value">{voter_name}</td>
+            </tr>
+            <tr>
+                <td class="label">उमेर:</td>
+                <td class="value">{age} वर्ष</td>
+            </tr>
+            <tr>
+                <td class="label">लिङ्ग:</td>
+                <td class="value">{gender}</td>
+            </tr>
+            <tr>
+                <td class="label">पिता/माता:</td>
+                <td class="value">{parent_name}</td>
+            </tr>
+            {spouse_section}
+        </table>
+        
+        <div class="signature">
+            दस्तखत / Signature
+        </div>
+        
+        <div class="footer">
+            <div class="timestamp">{timestamp}</div>
+            <div>*** धन्यवाद / Thank You ***</div>
+        </div>
+    </body>
+    </html>
+    """
+    
+    return html
+
+
 # Test function
 if __name__ == "__main__":
     # Sample voter data for testing

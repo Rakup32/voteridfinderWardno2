@@ -24,7 +24,7 @@ import base64
 import time
 import extra_streamlit_components as stx
 from credentials import USERNAME, PASSWORD
-from print_logic import format_voter_receipt
+from print_logic import format_voter_receipt, format_voter_receipt_html
 
 # ============================================================================
 # IMPORT NEPALI CONVERTER
@@ -343,6 +343,126 @@ def _build_direct_download_button(receipt_text, voter_num, voter_name):
 </div>
 """
 
+def print_receipt_qz(printer_name, html_content, voter_num):
+    """
+    Print HTML receipt using QZ Tray with auto-cut support.
+    
+    Parameters:
+    -----------
+    printer_name : str
+        Name of the printer (e.g., 'zkteco')
+    html_content : str
+        HTML content to print
+    voter_num : int/str
+        Voter number for identification
+    """
+    # Escape HTML for JavaScript
+    escaped_html = html_content.replace('\\', '\\\\').replace('`', '\\`').replace('$', '\\$').replace('\n', ' ')
+    
+    qz_js = f"""
+    <div id="qz-status-{voter_num}" style="padding: 12px; border-radius: 8px; margin: 8px 0; font-size: 13px; line-height: 1.4;"></div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/qz-tray@2.2.3/qz-tray.min.js"></script>
+    
+    <script>
+    (function() {{
+        const statusDiv = document.getElementById('qz-status-{voter_num}');
+        
+        function updateStatus(message, type = 'info') {{
+            const colors = {{
+                'info': '#3182ce',
+                'success': '#38a169',
+                'error': '#e53e3e',
+                'warning': '#d69e2e'
+            }};
+            statusDiv.style.background = colors[type] + '22';
+            statusDiv.style.border = '2px solid ' + colors[type];
+            statusDiv.style.color = colors[type];
+            statusDiv.innerHTML = message;
+        }}
+        
+        async function printToQZ() {{
+            try {{
+                updateStatus('🔌 QZ Tray मा जडान गर्दै... / Connecting to QZ Tray...', 'info');
+                
+                // Connect to QZ Tray
+                await qz.websocket.connect();
+                updateStatus('✅ QZ Tray जडान भयो / Connected', 'success');
+                
+                // Find printer
+                const printers = await qz.printers.find();
+                console.log('Available printers:', printers);
+                
+                let targetPrinter = printers.find(p => 
+                    p.toLowerCase().includes('{printer_name}'.toLowerCase())
+                );
+                
+                if (!targetPrinter) {{
+                    targetPrinter = printers[0];
+                    updateStatus(`⚠️ प्रिन्टर "{printer_name}" भेटिएन। प्रयोग गर्दै: ${{targetPrinter}}`, 'warning');
+                }} else {{
+                    updateStatus(`🖨️ प्रिन्टर भेटियो / Found: ${{targetPrinter}}`, 'success');
+                }}
+                
+                // Prepare print data with auto-cut
+                const config = qz.configs.create(targetPrinter);
+                
+                const htmlData = `{escaped_html}`;
+                
+                // ESC/POS auto-cut command
+                const cutCommand = '\\x1B\\x69';  // ESC i - Full cut
+                
+                const printData = [
+                    {{
+                        type: 'pixel',
+                        format: 'html',
+                        flavor: 'plain',
+                        data: htmlData
+                    }},
+                    {{
+                        type: 'raw',
+                        format: 'command',
+                        data: cutCommand
+                    }}
+                ];
+                
+                updateStatus('🖨️ प्रिन्ट गर्दै... / Printing...', 'info');
+                await qz.print(config, printData);
+                
+                updateStatus('✅ प्रिन्ट सफल! कागज काटिनेछ। / Print successful! Paper will auto-cut.', 'success');
+                
+                // Disconnect after 2 seconds
+                setTimeout(async () => {{
+                    await qz.websocket.disconnect();
+                    updateStatus('✅ प्रिन्ट पूरा भयो। / Print completed.', 'success');
+                }}, 2000);
+                
+            }} catch (err) {{
+                console.error('QZ Tray Error:', err);
+                let errorMsg = '❌ प्रिन्ट त्रुटि / Print Error: ';
+                
+                if (err.message && err.message.includes('Unable to establish connection')) {{
+                    errorMsg += 'QZ Tray चालू छैन। कृपया QZ Tray सुरु गर्नुहोस्। / QZ Tray is not running. Please start QZ Tray.';
+                }} else if (err.message && err.message.includes('Unable to find')) {{
+                    errorMsg += 'प्रिन्टर भेटिएन। / Printer not found.';
+                }} else {{
+                    errorMsg += err.message || 'Unknown error';
+                }}
+                
+                updateStatus(errorMsg, 'error');
+            }}
+        }}
+        
+        // Auto-start printing
+        printToQZ();
+    }})();
+    </script>
+    """
+    
+    # Display in Streamlit
+    st.components.v1.html(qz_js, height=90, scrolling=False)
+
+
 def show_results_table_with_print(data, columns):
     """Display results with direct download for thermal printer."""
     if data.empty:
@@ -375,6 +495,18 @@ def show_results_table_with_print(data, columns):
 
             with col2:
                 voter_dict = row.to_dict()
+                
+                # Generate HTML receipt for QZ Tray
+                html_receipt = format_voter_receipt_html(voter_dict)
+                
+                # Print Slip button with QZ Tray
+                if st.button("🖨️ Print Slip", key=f"print_qz_{idx}_{voter_num}", use_container_width=True):
+                    with st.spinner("Printing..."):
+                        print_receipt_qz('zkteco', html_receipt, voter_num)
+                
+                st.markdown("---")
+                
+                # Original download button for thermal printer
                 receipt_text = format_voter_receipt(voter_dict)
                 download_button = _build_direct_download_button(receipt_text, voter_num, voter_name)
                 st.components.v1.html(download_button, height=120, scrolling=False)
