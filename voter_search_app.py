@@ -343,17 +343,167 @@ def _build_direct_download_button(receipt_text, voter_num, voter_name):
 </div>
 """
 
+def create_qz_print_button_text(voter_num, voter_name, age, gender, parent, spouse):
+    """
+    Create print button using PLAIN TEXT format - most reliable for thermal printers.
+    Avoids all HTML/encoding issues.
+    
+    Parameters:
+    -----------
+    voter_num : int/str
+    voter_name : str
+    age : int/str
+    gender : str
+    parent : str
+    spouse : str
+    """
+    import json
+    
+    # Safely encode all text as JSON strings
+    voter_name_json = json.dumps(str(voter_name))
+    parent_json = json.dumps(str(parent))
+    spouse_json = json.dumps(str(spouse) if spouse and spouse != '-' else '')
+    
+    html = f"""
+    <div style="width: 100%; padding: 8px;">
+        <button id="printBtn_{voter_num}" onclick="printReceipt_{voter_num}()" style="
+            width: 100%;
+            padding: 14px 16px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+            margin-bottom: 10px;
+        " onmouseover="this.style.transform='translateY(-2px)'"
+           onmouseout="this.style.transform='translateY(0)'">
+            🖨️ Print Slip
+        </button>
+        
+        <div id="status_{voter_num}" style="
+            padding: 10px;
+            border-radius: 6px;
+            font-size: 12px;
+            line-height: 1.4;
+            display: none;
+            margin-top: 8px;
+        "></div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/qz-tray@2.2.3/qz-tray.min.js"></script>
+    
+    <script>
+    (function() {{
+        const voterNum = "{voter_num}";
+        const voterName = {voter_name_json};
+        const age = "{age}";
+        const gender = "{gender}";
+        const parent = {parent_json};
+        const spouse = {spouse_json};
+        
+        const statusDiv = document.getElementById('status_{voter_num}');
+        const printBtn = document.getElementById('printBtn_{voter_num}');
+        
+        function updateStatus(msg, type) {{
+            const colors = {{'info':'#3182ce','success':'#38a169','error':'#e53e3e','warning':'#d69e2e'}};
+            statusDiv.style.display = 'block';
+            statusDiv.style.background = colors[type] + '22';
+            statusDiv.style.border = '2px solid ' + colors[type];
+            statusDiv.style.color = colors[type];
+            statusDiv.innerHTML = msg;
+        }}
+        
+        window.printReceipt_{voter_num} = async function() {{
+            try {{
+                printBtn.disabled = true;
+                printBtn.style.opacity = '0.6';
+                
+                updateStatus('🔌 Connecting...', 'info');
+                
+                if (!qz.websocket.isActive()) {{
+                    await qz.websocket.connect();
+                }}
+                
+                updateStatus('✅ Connected', 'success');
+                
+                const printers = await qz.printers.find();
+                let printer = printers.find(p => p.toLowerCase().includes('zkteco')) || printers[0];
+                
+                updateStatus('🖨️ Printing...', 'info');
+                
+                const config = qz.configs.create(printer);
+                
+                // Build plain text receipt
+                let receipt = "\\n";
+                receipt += "==========================================\\n";
+                receipt += "         मतदाता विवरण\\n";
+                receipt += "        VOTER DETAILS\\n";
+                receipt += "==========================================\\n\\n";
+                receipt += "मतदाता नं: " + voterNum + "\\n\\n";
+                receipt += "नाम: " + voterName + "\\n";
+                receipt += "उमेर: " + age + " वर्ष | लिङ्ग: " + gender + "\\n";
+                receipt += "पिता/माता: " + parent + "\\n";
+                if (spouse) {{
+                    receipt += "पति/पत्नी: " + spouse + "\\n";
+                }}
+                receipt += "\\n\\n";
+                receipt += "         _________________\\n";
+                receipt += "         दस्तखत / Signature\\n\\n";
+                receipt += "------------------------------------------\\n";
+                receipt += "        धन्यवाद / Thank You\\n";
+                receipt += "==========================================\\n\\n\\n";
+                
+                await qz.print(config, [{{
+                    type: 'raw',
+                    format: 'plain',
+                    data: receipt
+                }}, {{
+                    type: 'raw',
+                    format: 'command',
+                    data: '\\x1B\\x69'
+                }}]);
+                
+                updateStatus('✅ सफल!', 'success');
+                
+                setTimeout(() => {{
+                    printBtn.disabled = false;
+                    printBtn.style.opacity = '1';
+                    statusDiv.style.display = 'none';
+                }}, 3000);
+                
+            }} catch (err) {{
+                console.error(err);
+                let msg = '❌ Error: ';
+                if (err.message.includes('establish')) msg += 'Start QZ Tray!';
+                else if (err.message.includes('find')) msg += 'Turn ON printer';
+                else msg += err.message;
+                updateStatus(msg, 'error');
+                printBtn.disabled = false;
+                printBtn.style.opacity = '1';
+            }}
+        }};
+    }})();
+    </script>
+    """
+    
+    return html
+
+
 def create_qz_print_button(voter_num, html_content, voter_name):
     """
     Create an HTML button with embedded QZ Tray printing functionality.
-    Uses base64 encoding for safe data transmission.
+    Uses PLAIN TEXT mode instead of HTML for maximum compatibility.
     
     Parameters:
     -----------
     voter_num : int/str
         Voter number for identification
     html_content : str
-        HTML content to print
+        HTML content (will be ignored, we'll use plain text)
     voter_name : str
         Voter name for display
     
@@ -361,11 +511,14 @@ def create_qz_print_button(voter_num, html_content, voter_name):
     --------
     str : Complete HTML with button and QZ Tray printing logic
     """
-    import base64
+    import json
     
-    # Encode HTML as base64 - this is the safest method
-    html_bytes = html_content.encode('utf-8')
-    html_base64 = base64.b64encode(html_bytes).decode('ascii')
+    # Instead of HTML, we'll send the plain text version
+    # This is much more reliable for thermal printers
+    from print_logic import format_voter_receipt
+    
+    # Get the voter data to create plain text receipt
+    # Note: voter_name is actually the full voter dict passed as parameter
     
     html = f"""
     <div style="width: 100%; padding: 8px;">
@@ -398,6 +551,9 @@ def create_qz_print_button(voter_num, html_content, voter_name):
             display: none;
             margin-top: 8px;
         "></div>
+        
+        <!-- Hidden data -->
+        <div id="voterData_{voter_num}" style="display:none;"></div>
     </div>
     
     <script src="https://cdn.jsdelivr.net/npm/qz-tray@2.2.3/qz-tray.min.js"></script>
@@ -406,9 +562,6 @@ def create_qz_print_button(voter_num, html_content, voter_name):
     (function() {{
         const statusDiv = document.getElementById('status_{voter_num}');
         const printBtn = document.getElementById('printBtn_{voter_num}');
-        
-        // HTML content stored as base64
-        const htmlBase64 = "{html_base64}";
         
         function updateStatus(message, type = 'info') {{
             const colors = {{
@@ -426,22 +579,19 @@ def create_qz_print_button(voter_num, html_content, voter_name):
         
         window.printReceipt_{voter_num} = async function() {{
             try {{
-                // Disable button during printing
                 printBtn.disabled = true;
                 printBtn.style.opacity = '0.6';
                 printBtn.style.cursor = 'not-allowed';
                 
-                updateStatus('🔌 जडान गर्दै...<br>Connecting...', 'info');
+                updateStatus('🔌 जडान गर्दै...', 'info');
                 
-                // Connect to QZ Tray
                 if (!qz.websocket.isActive()) {{
                     await qz.websocket.connect();
                 }}
-                updateStatus('✅ जडान भयो<br>Connected', 'success');
+                updateStatus('✅ जडान भयो', 'success');
                 
-                // Find printer
                 const printers = await qz.printers.find();
-                console.log('Available printers:', printers);
+                console.log('Printers:', printers);
                 
                 let targetPrinter = printers.find(p => 
                     p.toLowerCase().includes('zkteco')
@@ -449,42 +599,56 @@ def create_qz_print_button(voter_num, html_content, voter_name):
                 
                 if (!targetPrinter) {{
                     targetPrinter = printers[0];
-                    updateStatus(`⚠️ Using: ${{targetPrinter}}`, 'warning');
+                    updateStatus(`Using: ${{targetPrinter}}`, 'warning');
                     await new Promise(resolve => setTimeout(resolve, 1000));
                 }} else {{
-                    updateStatus(`🖨️ Found: ${{targetPrinter}}`, 'success');
-                    await new Promise(resolve => setTimeout(resolve, 600));
+                    updateStatus(`🖨️ ${{targetPrinter}}`, 'success');
+                    await new Promise(resolve => setTimeout(resolve, 500));
                 }}
                 
-                // Decode base64 to get HTML
-                const htmlContent = atob(htmlBase64);
+                const config = qz.configs.create(targetPrinter, {{
+                    encoding: 'UTF-8'
+                }});
                 
-                // Prepare print configuration
-                const config = qz.configs.create(targetPrinter);
+                // Create simple text receipt - works better than HTML
+                const receipt = `
+==========================================
+         मतदाता विवरण
+        VOTER DETAILS
+==========================================
+
+मतदाता नं: {voter_num}
+
+नाम: {voter_name}
+
+------------------------------------------
+         धन्यवाद / Thank You
+==========================================
+
+
+`;
                 
-                // ESC/POS auto-cut command
-                const cutCommand = '\\x1B\\x69';
+                // Auto-cut command
+                const cutCmd = '\\x1B\\x69';
                 
                 const printData = [
                     {{
-                        type: 'pixel',
-                        format: 'html',
-                        flavor: 'plain',
-                        data: htmlContent
+                        type: 'raw',
+                        format: 'plain',
+                        data: receipt
                     }},
                     {{
                         type: 'raw',
                         format: 'command',
-                        data: cutCommand
+                        data: cutCmd
                     }}
                 ];
                 
-                updateStatus('🖨️ प्रिन्ट गर्दै...<br>Printing...', 'info');
+                updateStatus('🖨️ प्रिन्ट गर्दै...', 'info');
                 await qz.print(config, printData);
                 
-                updateStatus('✅ सफल!<br>Success!', 'success');
+                updateStatus('✅ सफल!', 'success');
                 
-                // Re-enable button after 3 seconds
                 setTimeout(() => {{
                     printBtn.disabled = false;
                     printBtn.style.opacity = '1';
@@ -493,20 +657,20 @@ def create_qz_print_button(voter_num, html_content, voter_name):
                 }}, 3000);
                 
             }} catch (err) {{
-                console.error('Print Error:', err);
-                let errorMsg = '❌ त्रुटि / Error:<br>';
+                console.error('Error:', err);
+                let msg = '❌ त्रुटि:<br>';
                 
-                if (err.message && err.message.includes('Unable to establish connection')) {{
-                    errorMsg += '<strong>QZ Tray चालू छैन</strong><br>QZ Tray is not running<br>Please start QZ Tray!';
+                if (err.message && err.message.includes('Unable to establish')) {{
+                    msg += '<strong>QZ Tray बन्द छ</strong><br>Start QZ Tray!';
                 }} else if (err.message && err.message.includes('Unable to find')) {{
-                    errorMsg += '<strong>प्रिन्टर भेटिएन</strong><br>Printer not found<br>Check printer is ON';
+                    msg += '<strong>प्रिन्टर भेटिएन</strong><br>Turn ON printer';
                 }} else {{
-                    errorMsg += err.message || 'Unknown error<br>Check console (F12)';
+                    msg += err.message || 'Unknown';
+                    msg += '<br>Press F12 for details';
                 }}
                 
-                updateStatus(errorMsg, 'error');
+                updateStatus(msg, 'error');
                 
-                // Re-enable button
                 printBtn.disabled = false;
                 printBtn.style.opacity = '1';
                 printBtn.style.cursor = 'pointer';
@@ -552,11 +716,17 @@ def show_results_table_with_print(data, columns):
             with col2:
                 voter_dict = row.to_dict()
                 
-                # Generate HTML receipt for QZ Tray
-                html_receipt = format_voter_receipt_html(voter_dict)
+                # Get voter info for plain text receipt
+                voter_name_val = voter_dict.get('मतदाताको नाम', 'N/A')
+                age_val = voter_dict.get('उमेर(वर्ष)', 'N/A')
+                gender_val = voter_dict.get('लिङ्ग', 'N/A')
+                parent_val = voter_dict.get('पिता/माताको नाम', 'N/A')
+                spouse_val = voter_dict.get('पति/पत्नीको नाम', '')
                 
-                # Print Slip button using HTML/JavaScript (no page reload)
-                print_button_html = create_qz_print_button(voter_num, html_receipt, voter_name)
+                # Print Slip button using plain text (most reliable)
+                print_button_html = create_qz_print_button_text(
+                    voter_num, voter_name_val, age_val, gender_val, parent_val, spouse_val
+                )
                 st.components.v1.html(print_button_html, height=180, scrolling=False)
                 
                 st.markdown("---")
