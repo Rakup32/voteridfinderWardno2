@@ -361,14 +361,10 @@ def create_qz_print_button(voter_num, html_content, voter_name):
     --------
     str : Complete HTML with button and QZ Tray printing logic
     """
-    # Escape HTML for JavaScript - more thorough escaping
-    escaped_html = (html_content
-                    .replace('\\', '\\\\')
-                    .replace('`', '\\`')
-                    .replace('$', '\\$')
-                    .replace('\n', ' ')
-                    .replace('\r', '')
-                    .replace('"', '\\"'))
+    import json
+    
+    # Use JSON encoding for safe transmission - this handles all special characters
+    html_json = json.dumps(html_content)
     
     html = f"""
     <div style="width: 100%; padding: 8px;">
@@ -409,6 +405,9 @@ def create_qz_print_button(voter_num, html_content, voter_name):
     (function() {{
         const statusDiv = document.getElementById('status_{voter_num}');
         const printBtn = document.getElementById('printBtn_{voter_num}');
+        
+        // HTML content stored safely as JSON
+        const htmlContent = {html_json};
         
         function updateStatus(message, type = 'info') {{
             const colors = {{
@@ -459,9 +458,6 @@ def create_qz_print_button(voter_num, html_content, voter_name):
                 // Prepare print configuration
                 const config = qz.configs.create(targetPrinter);
                 
-                // HTML receipt data
-                const htmlData = "{escaped_html}";
-                
                 // ESC/POS auto-cut command
                 const cutCommand = '\\x1B\\x69';  // ESC i - Full cut
                 
@@ -470,7 +466,7 @@ def create_qz_print_button(voter_num, html_content, voter_name):
                         type: 'pixel',
                         format: 'html',
                         flavor: 'plain',
-                        data: htmlData
+                        data: htmlContent
                     }},
                     {{
                         type: 'raw',
@@ -500,6 +496,8 @@ def create_qz_print_button(voter_num, html_content, voter_name):
                     errorMsg += 'QZ Tray चालू छैन।<br>QZ Tray is not running.<br><strong>Please start QZ Tray first!</strong>';
                 }} else if (err.message && err.message.includes('Unable to find')) {{
                     errorMsg += 'प्रिन्टर भेटिएन।<br>Printer not found.<br>Check printer is ON.';
+                }} else if (err.message && err.message.includes('Malformed')) {{
+                    errorMsg += 'HTML formatting error.<br>Please contact support.';
                 }} else {{
                     errorMsg += err.message || 'Unknown error';
                 }}
