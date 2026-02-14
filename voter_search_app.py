@@ -346,7 +346,7 @@ def _build_direct_download_button(receipt_text, voter_num, voter_name):
 def create_qz_print_button(voter_num, html_content, voter_name):
     """
     Create an HTML button with embedded QZ Tray printing functionality.
-    This avoids Streamlit page reloads.
+    Uses base64 encoding for safe data transmission.
     
     Parameters:
     -----------
@@ -361,10 +361,11 @@ def create_qz_print_button(voter_num, html_content, voter_name):
     --------
     str : Complete HTML with button and QZ Tray printing logic
     """
-    import json
+    import base64
     
-    # Use JSON encoding for safe transmission - this handles all special characters
-    html_json = json.dumps(html_content)
+    # Encode HTML as base64 - this is the safest method
+    html_bytes = html_content.encode('utf-8')
+    html_base64 = base64.b64encode(html_bytes).decode('ascii')
     
     html = f"""
     <div style="width: 100%; padding: 8px;">
@@ -406,8 +407,8 @@ def create_qz_print_button(voter_num, html_content, voter_name):
         const statusDiv = document.getElementById('status_{voter_num}');
         const printBtn = document.getElementById('printBtn_{voter_num}');
         
-        // HTML content stored safely as JSON
-        const htmlContent = {html_json};
+        // HTML content stored as base64
+        const htmlBase64 = "{html_base64}";
         
         function updateStatus(message, type = 'info') {{
             const colors = {{
@@ -430,13 +431,13 @@ def create_qz_print_button(voter_num, html_content, voter_name):
                 printBtn.style.opacity = '0.6';
                 printBtn.style.cursor = 'not-allowed';
                 
-                updateStatus('🔌 QZ Tray मा जडान गर्दै...<br>Connecting to QZ Tray...', 'info');
+                updateStatus('🔌 जडान गर्दै...<br>Connecting...', 'info');
                 
                 // Connect to QZ Tray
                 if (!qz.websocket.isActive()) {{
                     await qz.websocket.connect();
                 }}
-                updateStatus('✅ जडान भयो / Connected', 'success');
+                updateStatus('✅ जडान भयो<br>Connected', 'success');
                 
                 // Find printer
                 const printers = await qz.printers.find();
@@ -448,18 +449,21 @@ def create_qz_print_button(voter_num, html_content, voter_name):
                 
                 if (!targetPrinter) {{
                     targetPrinter = printers[0];
-                    updateStatus(`⚠️ "zkteco" भेटिएन। प्रयोग गर्दै:<br>${{targetPrinter}}`, 'warning');
-                    await new Promise(resolve => setTimeout(resolve, 1500));
+                    updateStatus(`⚠️ Using: ${{targetPrinter}}`, 'warning');
+                    await new Promise(resolve => setTimeout(resolve, 1000));
                 }} else {{
-                    updateStatus(`🖨️ प्रिन्टर भेटियो<br>Found: ${{targetPrinter}}`, 'success');
-                    await new Promise(resolve => setTimeout(resolve, 800));
+                    updateStatus(`🖨️ Found: ${{targetPrinter}}`, 'success');
+                    await new Promise(resolve => setTimeout(resolve, 600));
                 }}
+                
+                // Decode base64 to get HTML
+                const htmlContent = atob(htmlBase64);
                 
                 // Prepare print configuration
                 const config = qz.configs.create(targetPrinter);
                 
                 // ESC/POS auto-cut command
-                const cutCommand = '\\x1B\\x69';  // ESC i - Full cut
+                const cutCommand = '\\x1B\\x69';
                 
                 const printData = [
                     {{
@@ -478,7 +482,7 @@ def create_qz_print_button(voter_num, html_content, voter_name):
                 updateStatus('🖨️ प्रिन्ट गर्दै...<br>Printing...', 'info');
                 await qz.print(config, printData);
                 
-                updateStatus('✅ प्रिन्ट सफल! कागज काटिनेछ।<br>Print successful! Paper will auto-cut.', 'success');
+                updateStatus('✅ सफल!<br>Success!', 'success');
                 
                 // Re-enable button after 3 seconds
                 setTimeout(() => {{
@@ -489,17 +493,15 @@ def create_qz_print_button(voter_num, html_content, voter_name):
                 }}, 3000);
                 
             }} catch (err) {{
-                console.error('QZ Tray Error:', err);
-                let errorMsg = '❌ प्रिन्ट त्रुटि / Print Error:<br>';
+                console.error('Print Error:', err);
+                let errorMsg = '❌ त्रुटि / Error:<br>';
                 
                 if (err.message && err.message.includes('Unable to establish connection')) {{
-                    errorMsg += 'QZ Tray चालू छैन।<br>QZ Tray is not running.<br><strong>Please start QZ Tray first!</strong>';
+                    errorMsg += '<strong>QZ Tray चालू छैन</strong><br>QZ Tray is not running<br>Please start QZ Tray!';
                 }} else if (err.message && err.message.includes('Unable to find')) {{
-                    errorMsg += 'प्रिन्टर भेटिएन।<br>Printer not found.<br>Check printer is ON.';
-                }} else if (err.message && err.message.includes('Malformed')) {{
-                    errorMsg += 'HTML formatting error.<br>Please contact support.';
+                    errorMsg += '<strong>प्रिन्टर भेटिएन</strong><br>Printer not found<br>Check printer is ON';
                 }} else {{
-                    errorMsg += err.message || 'Unknown error';
+                    errorMsg += err.message || 'Unknown error<br>Check console (F12)';
                 }}
                 
                 updateStatus(errorMsg, 'error');
