@@ -151,8 +151,8 @@ def format_voter_receipt(voter_data):
 
 def format_voter_receipt_html(voter_data):
     """
-    Format voter data as CLEAN HTML for QZ Tray pixel printing on 80mm thermal printer.
-    Optimized for Nepali (Devanagari) text rendering.
+    Format voter data as HTML for QZ Tray pixel printing on 80mm thermal printer.
+    Optimized for perfect Nepali (Devanagari) text rendering.
     
     Parameters:
     -----------
@@ -180,9 +180,13 @@ def format_voter_receipt_html(voter_data):
     spouse_row = ""
     if spouse_name and spouse_name.strip() and spouse_name.strip() != '-':
         spouse_name = normalize_text(spouse_name)
-        spouse_row = f'<div class="info-row"><span class="label">पति/पत्नी:</span> <span class="value">{spouse_name}</span></div>'
+        spouse_row = f'''
+        <div class="info-row">
+            <span class="label">पति/पत्नी:</span><br>
+            <span class="value">{spouse_name}</span>
+        </div>'''
     
-    # Build HTML with proper structure for 80mm printer
+    # Build HTML with improved font stack and rendering
     html = f"""<!DOCTYPE html>
 <html>
 <head>
@@ -193,91 +197,132 @@ def format_voter_receipt_html(voter_data):
             size: 80mm auto;
             margin: 0;
         }}
+        
         body {{
             width: 72mm;
-            font-family: Arial, sans-serif;
-            font-size: 11pt;
+            font-family: 'Noto Sans Devanagari', 'Mangal', 'Kalimati', 'Arial Unicode MS', Arial, sans-serif;
+            font-size: 12pt;
             margin: 0;
-            padding: 4mm;
+            padding: 5mm;
             background: white;
             color: black;
-            line-height: 1.4;
+            line-height: 1.5;
+            -webkit-font-smoothing: antialiased;
+            text-rendering: optimizeLegibility;
         }}
+        
         .header {{
             text-align: center;
-            border-bottom: 2px solid #000;
+            border-bottom: 3px solid #000;
             padding-bottom: 3mm;
             margin-bottom: 4mm;
         }}
+        
         .header-title {{
-            font-size: 16pt;
+            font-size: 18pt;
             font-weight: bold;
             margin-bottom: 2mm;
+            letter-spacing: 0.5px;
         }}
+        
         .header-subtitle {{
-            font-size: 10pt;
+            font-size: 11pt;
             color: #333;
+            font-weight: 600;
         }}
+        
         .serial-box {{
             background: #f0f0f0;
-            border: 2px solid #000;
+            border: 3px solid #000;
             text-align: center;
-            padding: 3mm 0;
-            margin: 3mm 0;
-            font-size: 13pt;
-            font-weight: bold;
-        }}
-        .voter-number {{
-            text-align: center;
+            padding: 4mm 0;
+            margin: 4mm 0;
             font-size: 16pt;
             font-weight: bold;
-            padding: 3mm 0;
-            border-top: 1px dashed #666;
-            border-bottom: 1px dashed #666;
-            margin: 3mm 0;
         }}
+        
+        .voter-number {{
+            text-align: center;
+            font-size: 20pt;
+            font-weight: bold;
+            padding: 4mm 0;
+            border-top: 2px solid #000;
+            border-bottom: 2px solid #000;
+            margin: 4mm 0;
+            background: #f8f8f8;
+        }}
+        
         .info-section {{
-            margin: 3mm 0;
+            margin: 4mm 0;
+            padding: 2mm 0;
         }}
+        
         .info-row {{
-            margin: 2mm 0;
-            padding: 1mm 0;
+            margin: 3mm 0;
+            padding: 2mm 0;
+            border-bottom: 1px dotted #ccc;
         }}
+        
         .label {{
             font-weight: bold;
-            display: inline-block;
+            font-size: 11pt;
+            display: block;
+            margin-bottom: 1mm;
+            color: #000;
         }}
+        
         .value {{
-            display: inline;
+            font-size: 13pt;
+            display: block;
+            padding-left: 2mm;
+            font-weight: 600;
         }}
+        
         .inline-info {{
-            margin: 2mm 0;
+            margin: 3mm 0;
+            padding: 3mm;
+            background: #f5f5f5;
+            border-radius: 2mm;
+            font-size: 12pt;
         }}
+        
         .signature-section {{
-            margin-top: 8mm;
-            padding-top: 3mm;
-            border-top: 1px solid #666;
-        }}
-        .signature-line {{
             margin-top: 10mm;
+            padding-top: 4mm;
+            border-top: 2px solid #666;
+        }}
+        
+        .signature-label {{
+            font-size: 10pt;
+            margin-bottom: 2mm;
+            font-weight: bold;
+        }}
+        
+        .signature-line {{
+            margin-top: 12mm;
             padding-top: 2mm;
-            border-top: 1px dashed #000;
+            border-top: 2px dashed #000;
             text-align: right;
             font-size: 9pt;
+            font-weight: bold;
         }}
+        
         .footer {{
-            margin-top: 4mm;
-            padding-top: 3mm;
-            border-top: 1px solid #666;
+            margin-top: 5mm;
+            padding-top: 4mm;
+            border-top: 3px solid #000;
             text-align: center;
-            font-size: 9pt;
         }}
+        
         .footer-time {{
-            margin-bottom: 2mm;
+            margin-bottom: 3mm;
             color: #555;
+            font-size: 10pt;
         }}
+        
         .footer-thanks {{
             font-weight: bold;
+            font-size: 12pt;
         }}
     </style>
 </head>
@@ -289,32 +334,42 @@ def format_voter_receipt_html(voter_data):
     </div>
     
     <!-- Serial Number -->
-    <div class="serial-box">सि.नं.: {serial_no}</div>
+    <div class="serial-box">
+        <strong>सि.नं.: {serial_no}</strong>
+    </div>
     
     <!-- Voter Number (Prominent) -->
-    <div class="voter-number">मतदाता नं: {voter_no}</div>
+    <div class="voter-number">
+        <strong>मतदाता नं: {voter_no}</strong>
+    </div>
     
     <!-- Voter Information -->
     <div class="info-section">
+        <!-- Name -->
         <div class="info-row">
-            <span class="label">नाम:</span> <span class="value">{voter_name}</span>
+            <span class="label">नाम:</span>
+            <span class="value">{voter_name}</span>
         </div>
         
+        <!-- Age and Gender -->
         <div class="info-row inline-info">
-            <span class="label">उमेर:</span> {age} वर्ष | 
-            <span class="label">लिङ्ग:</span> {gender}
+            <strong>उमेर:</strong> {age} वर्ष | 
+            <strong>लिङ्ग:</strong> {gender}
         </div>
         
+        <!-- Father/Mother -->
         <div class="info-row">
-            <span class="label">पिता/माता:</span> <span class="value">{parent_name}</span>
+            <span class="label">पिता/माता:</span>
+            <span class="value">{parent_name}</span>
         </div>
         
+        <!-- Spouse (if exists) -->
         {spouse_row}
     </div>
     
     <!-- Signature Section -->
     <div class="signature-section">
-        <div style="font-size: 9pt; margin-bottom: 2mm;">हस्ताक्षर / Signature:</div>
+        <div class="signature-label">हस्ताक्षर / Signature:</div>
         <div class="signature-line">_________________</div>
     </div>
     

@@ -612,15 +612,25 @@ def create_qz_print_button_image(voter_num, html_content):
                     await new Promise(resolve => setTimeout(resolve, 500));
                 }}
                 
-                // Step 3: Configure printer
-                const config = qz.configs.create(targetPrinter);
+                // Step 3: Configure printer with higher DPI for better text rendering
+                const config = qz.configs.create(targetPrinter, {{
+                    units: 'mm',
+                    scaleContent: false,
+                    rasterize: true,
+                    density: 'high',
+                    margins: {{top: 0, right: 0, bottom: 0, left: 0}}
+                }});
                 
                 // Step 4: Prepare print data using PIXEL mode with HTML
                 const printData = [{{
                     type: 'pixel',
                     format: 'html',
                     flavor: 'plain',
-                    data: htmlContent
+                    data: htmlContent,
+                    options: {{
+                        pageWidth: 80,
+                        pageHeight: null
+                    }}
                 }}];
                 
                 // Step 5: Send to printer
