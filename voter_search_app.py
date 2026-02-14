@@ -612,32 +612,16 @@ def create_qz_print_button_image(voter_num, html_content):
                     await new Promise(resolve => setTimeout(resolve, 500));
                 }}
                 
-                // Step 3: Configure printer for best quality
-                const config = qz.configs.create(targetPrinter, {{
-                    units: 'mm',
-                    scaleContent: false,
-                    interpolation: 'bicubic',
-                    density: 'high'
-                }});
+                // Step 3: Configure printer
+                const config = qz.configs.create(targetPrinter);
                 
-                // Step 4: Prepare print data with HTML and auto-cut
-                const printData = [
-                    {{
-                        type: 'pixel',
-                        format: 'html',
-                        flavor: 'plain',
-                        data: htmlContent,
-                        options: {{
-                            pageWidth: 80
-                        }}
-                    }},
-                    {{
-                        type: 'raw',
-                        format: 'command',
-                        flavor: 'hex',
-                        data: '1D5641'  // ESC/POS: Full cut command (GS V A)
-                    }}
-                ];
+                // Step 4: Prepare print data using PIXEL mode with HTML
+                const printData = [{{
+                    type: 'pixel',
+                    format: 'html',
+                    flavor: 'plain',
+                    data: htmlContent
+                }}];
                 
                 // Step 5: Send to printer
                 updateStatus('🖨️ Printing...', 'info');
