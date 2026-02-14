@@ -665,30 +665,6 @@ def create_qz_print_button_image(voter_num, html_content):
     """
     
     return html
-                const tempDiv = document.createElement('div');
-                tempDiv.innerHTML = htmlContent;
-                const textContent = tempDiv.textContent || tempDiv.innerText;
-                
-                await qz.print(config, [{{
-                    type: 'raw',
-                    format: 'plain',
-                    data: textContent
-                }}, {{
-                    type: 'raw',
-                    format: 'command',
-                    data: '\\x1D\\x56\\x00'
-                }}]);
-                
-                updateStatus('✅ Printed (text mode)', 'success');
-            }} catch (err) {{
-                updateStatus('❌ Print failed: ' + err.message.substring(0, 30), 'error');
-            }}
-        }};
-    }})();
-    </script>
-    """
-    
-    return html
 
 
 def create_qz_print_button_text(voter_num, voter_name, age, gender, parent, spouse):
