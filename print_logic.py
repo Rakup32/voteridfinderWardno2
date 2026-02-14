@@ -282,8 +282,8 @@ def format_compact_receipt(voter_data):
 
 def format_voter_receipt_html(voter_data):
     """
-    Format voter data as simplified HTML for QZ Tray pixel printing (80mm thermal printer).
-    Optimized for minimal size and maximum compatibility.
+    Format voter data as HTML for QZ Tray pixel printing (80mm thermal printer).
+    Image mode ensures perfect Nepali character rendering.
     
     Parameters:
     -----------
@@ -292,13 +292,14 @@ def format_voter_receipt_html(voter_data):
     
     Returns:
     --------
-    str : Simplified HTML string ready for QZ Tray pixel printing
+    str : HTML string ready for QZ Tray pixel printing
     """
     
     # Get current timestamp
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
     
     # Extract voter data with safe defaults
+    serial_no = voter_data.get('सि.नं.', 'N/A')
     voter_no = voter_data.get('मतदाता नं', 'N/A')
     voter_name = normalize_text(voter_data.get('मतदाताको नाम', 'N/A'))
     age = voter_data.get('उमेर(वर्ष)', 'N/A')
@@ -310,9 +311,9 @@ def format_voter_receipt_html(voter_data):
     spouse_row = ""
     if spouse_name and spouse_name.strip() and spouse_name.strip() != '-':
         spouse_name = normalize_text(spouse_name)
-        spouse_row = f"<div><b>पति/पत्नी:</b> {spouse_name}</div>"
+        spouse_row = f"<div class='info'><b>पति/पत्नी:</b> {spouse_name}</div>"
     
-    # Create minimal, clean HTML
+    # Create clean HTML optimized for image rendering
     html = f"""<!DOCTYPE html>
 <html>
 <head>
@@ -324,6 +325,8 @@ body {{
     font-size: 11pt;
     margin: 0;
     padding: 4mm;
+    background: white;
+    color: black;
 }}
 .center {{
     text-align: center;
@@ -333,8 +336,17 @@ body {{
     padding-bottom: 2mm;
     margin-bottom: 3mm;
 }}
+.serial {{
+    font-size: 14pt;
+    font-weight: bold;
+    text-align: center;
+    padding: 2mm 0;
+    background: #f0f0f0;
+    border: 2px solid #000;
+    margin: 2mm 0;
+}}
 .voter-no {{
-    font-size: 16pt;
+    font-size: 15pt;
     font-weight: bold;
     text-align: center;
     padding: 2mm 0;
@@ -344,18 +356,13 @@ body {{
 }}
 .info {{
     margin: 1.5mm 0;
+    line-height: 1.4;
 }}
 .info b {{
     font-weight: bold;
 }}
-.signature {{
-    margin-top: 8mm;
-    padding-top: 8mm;
-    border-top: 1px solid #000;
-    text-align: center;
-}}
 .footer {{
-    margin-top: 3mm;
+    margin-top: 4mm;
     padding-top: 2mm;
     border-top: 1px solid #666;
     text-align: center;
@@ -368,12 +375,16 @@ body {{
 <div style="font-size:14pt;font-weight:bold;">मतदाता विवरण</div>
 <div>VOTER DETAILS</div>
 </div>
+
+<div class="serial">सि.नं.: {serial_no}</div>
+
 <div class="voter-no">मतदाता नं: {voter_no}</div>
+
 <div class="info"><b>नाम:</b> {voter_name}</div>
 <div class="info"><b>उमेर:</b> {age} वर्ष | <b>लिङ्ग:</b> {gender}</div>
 <div class="info"><b>पिता/माता:</b> {parent_name}</div>
 {spouse_row}
-<div class="signature">दस्तखत / Signature</div>
+
 <div class="footer">
 <div>{timestamp}</div>
 <div>धन्यवाद / Thank You</div>

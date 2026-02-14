@@ -343,6 +343,138 @@ def _build_direct_download_button(receipt_text, voter_num, voter_name):
 </div>
 """
 
+def create_qz_print_button_image(voter_num, html_content):
+    """
+    Create print button using IMAGE/PIXEL mode - renders HTML as image.
+    This is the MOST RELIABLE method for Nepali text printing.
+    
+    Parameters:
+    -----------
+    voter_num : int/str
+        Voter number for identification
+    html_content : str
+        HTML content to render as image
+    """
+    import base64
+    
+    # Encode HTML as base64
+    html_bytes = html_content.encode('utf-8')
+    html_base64 = base64.b64encode(html_bytes).decode('ascii')
+    
+    html = f"""
+    <div style="width: 100%; padding: 8px;">
+        <button id="printBtn_{voter_num}" onclick="printReceipt_{voter_num}()" style="
+            width: 100%;
+            padding: 14px 16px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+            margin-bottom: 10px;
+        " onmouseover="this.style.transform='translateY(-2px)'"
+           onmouseout="this.style.transform='translateY(0)'">
+            🖨️ Print Slip
+        </button>
+        
+        <div id="status_{voter_num}" style="
+            padding: 10px;
+            border-radius: 6px;
+            font-size: 12px;
+            line-height: 1.4;
+            display: none;
+            margin-top: 8px;
+        "></div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/qz-tray@2.2.3/qz-tray.min.js"></script>
+    
+    <script>
+    (function() {{
+        const htmlBase64 = "{html_base64}";
+        const statusDiv = document.getElementById('status_{voter_num}');
+        const printBtn = document.getElementById('printBtn_{voter_num}');
+        
+        function updateStatus(msg, type) {{
+            const colors = {{'info':'#3182ce','success':'#38a169','error':'#e53e3e','warning':'#d69e2e'}};
+            statusDiv.style.display = 'block';
+            statusDiv.style.background = colors[type] + '22';
+            statusDiv.style.border = '2px solid ' + colors[type];
+            statusDiv.style.color = colors[type];
+            statusDiv.innerHTML = msg;
+        }}
+        
+        window.printReceipt_{voter_num} = async function() {{
+            try {{
+                printBtn.disabled = true;
+                printBtn.style.opacity = '0.6';
+                
+                updateStatus('🔌 Connecting...', 'info');
+                
+                if (!qz.websocket.isActive()) {{
+                    await qz.websocket.connect();
+                }}
+                
+                updateStatus('✅ Connected', 'success');
+                
+                const printers = await qz.printers.find();
+                let printer = printers.find(p => p.toLowerCase().includes('zkteco')) || printers[0];
+                
+                updateStatus('🖨️ Preparing image...', 'info');
+                
+                // Decode base64 to get HTML
+                const htmlContent = decodeURIComponent(escape(atob(htmlBase64)));
+                
+                const config = qz.configs.create(printer);
+                
+                // Use pixel/image mode for perfect Nepali rendering
+                const printData = [
+                    {{
+                        type: 'pixel',
+                        format: 'html',
+                        flavor: 'plain',
+                        data: htmlContent
+                    }},
+                    {{
+                        type: 'raw',
+                        format: 'command',
+                        data: '\\x1D\\x56\\x00'  // Full cut
+                    }}
+                ];
+                
+                updateStatus('🖨️ Printing...', 'info');
+                await qz.print(config, printData);
+                
+                updateStatus('✅ सफल!', 'success');
+                
+                setTimeout(() => {{
+                    printBtn.disabled = false;
+                    printBtn.style.opacity = '1';
+                    statusDiv.style.display = 'none';
+                }}, 3000);
+                
+            }} catch (err) {{
+                console.error(err);
+                let msg = '❌ Error: ';
+                if (err.message.includes('establish')) msg += 'Start QZ Tray!';
+                else if (err.message.includes('find')) msg += 'Turn ON printer';
+                else msg += err.message.substring(0, 50);
+                updateStatus(msg, 'error');
+                printBtn.disabled = false;
+                printBtn.style.opacity = '1';
+            }}
+        }};
+    }})();
+    </script>
+    """
+    
+    return html
+
+
 def create_qz_print_button_text(voter_num, voter_name, age, gender, parent, spouse):
     """
     Create print button using ESC/POS commands with proper encoding for Nepali text.
@@ -757,17 +889,11 @@ def show_results_table_with_print(data, columns):
             with col2:
                 voter_dict = row.to_dict()
                 
-                # Get voter info for plain text receipt
-                voter_name_val = voter_dict.get('मतदाताको नाम', 'N/A')
-                age_val = voter_dict.get('उमेर(वर्ष)', 'N/A')
-                gender_val = voter_dict.get('लिङ्ग', 'N/A')
-                parent_val = voter_dict.get('पिता/माताको नाम', 'N/A')
-                spouse_val = voter_dict.get('पति/पत्नीको नाम', '')
+                # Generate HTML receipt for image-based printing (most reliable for Nepali)
+                html_receipt = format_voter_receipt_html(voter_dict)
                 
-                # Print Slip button using plain text (most reliable)
-                print_button_html = create_qz_print_button_text(
-                    voter_num, voter_name_val, age_val, gender_val, parent_val, spouse_val
-                )
+                # Print Slip button using IMAGE mode (renders HTML as image)
+                print_button_html = create_qz_print_button_image(voter_num, html_receipt)
                 st.components.v1.html(print_button_html, height=180, scrolling=False)
                 
                 st.markdown("---")
