@@ -38,6 +38,159 @@ def _normalize_unicode(s):
         return s
     return unicodedata.normalize("NFC", s.strip().lower())
 
+
+def print_receipt_qz(printer_name, html_content):
+    """
+    Print voter receipt using QZ Tray with pixel/HTML rendering.
+    This function injects JavaScript that connects to QZ Tray and sends HTML to the printer.
+    
+    Parameters:
+    -----------
+    printer_name : str
+        Name of the thermal printer (e.g., 'zkteco')
+    html_content : str
+        HTML string to print (from format_voter_receipt_html)
+    """
+    import html as html_module
+    
+    # Escape the HTML content for JavaScript
+    escaped_html = html_module.escape(html_content).replace('\n', '\\n').replace("'", "\\'")
+    
+    # JavaScript code to connect to QZ Tray and print
+    qz_print_js = f"""
+    <script src="https://cdn.jsdelivr.net/npm/qz-tray@2.2/qz-tray.min.js"></script>
+    <script>
+        (function() {{
+            console.log('🖨️ QZ Tray Print Script Loaded');
+            
+            // Configuration
+            const PRINTER_NAME = "{printer_name}";
+            const HTML_CONTENT = `{escaped_html}`;
+            
+            // Connect to QZ Tray
+            function connectQZ() {{
+                return new Promise((resolve, reject) => {{
+                    if (qz.websocket.isActive()) {{
+                        console.log('✅ QZ Tray already connected');
+                        resolve();
+                    }} else {{
+                        console.log('🔌 Connecting to QZ Tray...');
+                        qz.websocket.connect()
+                            .then(() => {{
+                                console.log('✅ QZ Tray connected successfully');
+                                resolve();
+                            }})
+                            .catch((err) => {{
+                                console.error('❌ QZ Tray connection failed:', err);
+                                reject(err);
+                            }});
+                    }}
+                }});
+            }}
+            
+            // Find printer
+            function findPrinter() {{
+                return new Promise((resolve, reject) => {{
+                    qz.printers.find(PRINTER_NAME)
+                        .then((found) => {{
+                            console.log('✅ Printer found:', found);
+                            resolve(found);
+                        }})
+                        .catch((err) => {{
+                            console.error('❌ Printer not found:', err);
+                            reject(err);
+                        }});
+                }});
+            }}
+            
+            // Print using pixel/HTML mode
+            function printHTML(printerName) {{
+                return new Promise((resolve, reject) => {{
+                    // Configure print data for pixel/HTML rendering
+                    const config = qz.configs.create(printerName);
+                    
+                    const data = [{{
+                        type: 'pixel',
+                        format: 'html',
+                        flavor: 'plain',
+                        data: HTML_CONTENT
+                    }}];
+                    
+                    console.log('🖨️ Sending print job to:', printerName);
+                    
+                    qz.print(config, data)
+                        .then(() => {{
+                            console.log('✅ Print job sent successfully');
+                            resolve();
+                        }})
+                        .catch((err) => {{
+                            console.error('❌ Print job failed:', err);
+                            reject(err);
+                        }});
+                }});
+            }}
+            
+            // Main execution
+            async function executePrint() {{
+                try {{
+                    // Step 1: Connect to QZ Tray
+                    await connectQZ();
+                    
+                    // Step 2: Find printer
+                    const printer = await findPrinter();
+                    
+                    // Step 3: Print
+                    await printHTML(printer);
+                    
+                    // Step 4: Show success message to user
+                    console.log('✅ Print completed successfully!');
+                    
+                    // Send success message to Streamlit
+                    window.parent.postMessage({{
+                        type: 'streamlit:setComponentValue',
+                        data: {{status: 'success', message: 'Print job sent successfully'}}
+                    }}, '*');
+                    
+                }} catch (error) {{
+                    console.error('❌ Print process failed:', error);
+                    
+                    // Send error message to Streamlit
+                    window.parent.postMessage({{
+                        type: 'streamlit:setComponentValue',
+                        data: {{status: 'error', message: error.message || 'Print failed'}}
+                    }}, '*');
+                }}
+            }}
+            
+            // Execute when DOM is ready
+            if (document.readyState === 'loading') {{
+                document.addEventListener('DOMContentLoaded', executePrint);
+            }} else {{
+                executePrint();
+            }}
+        }})();
+    </script>
+    <div style="padding: 20px; text-align: center; font-family: Arial, sans-serif;">
+        <h3 style="color: #2c5aa0;">🖨️ Printing...</h3>
+        <p>Connecting to QZ Tray and sending print job to <strong>{printer_name}</strong></p>
+        <div style="margin-top: 20px;">
+            <div style="display: inline-block; width: 40px; height: 40px; border: 4px solid #f3f3f3; border-top: 4px solid #2c5aa0; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+        </div>
+        <style>
+            @keyframes spin {{
+                0% {{ transform: rotate(0deg); }}
+                100% {{ transform: rotate(360deg); }}
+            }}
+        </style>
+        <p style="margin-top: 20px; font-size: 14px; color: #666;">
+            Check console for status messages
+        </p>
+    </div>
+    """
+    
+    # Display the component (will execute the print)
+    st.components.v1.html(qz_print_js, height=200, scrolling=False)
+
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
@@ -345,29 +498,27 @@ def _build_direct_download_button(receipt_text, voter_num, voter_name):
 
 def create_qz_print_button_image(voter_num, html_content):
     """
-    Create print button using IMAGE mode with chunked data transmission.
-    Avoids Malformed URL by splitting data into smaller pieces.
+    Create print button using QZ Tray PIXEL mode with HTML rendering.
+    Optimized for 80mm thermal printers with Nepali (Devanagari) text.
     
     Parameters:
     -----------
     voter_num : int/str
         Voter number for identification
     html_content : str
-        HTML content to render as image
+        HTML content from format_voter_receipt_html() function
     """
-    # Simplify HTML - remove all extra whitespace and newlines
-    import re
-    html_clean = re.sub(r'\s+', ' ', html_content).strip()
+    import json
     
-    # Split into chunks to avoid URL length limits
-    chunk_size = 1000
-    chunks = [html_clean[i:i+chunk_size] for i in range(0, len(html_clean), chunk_size)]
-    
-    # Create JavaScript array of chunks
-    chunks_js = str(chunks).replace("'", '"')
+    # Escape HTML content for JavaScript (simple and safe)
+    html_escaped = (html_content
+                   .replace('\\', '\\\\')
+                   .replace('`', '\\`')
+                   .replace('$', '\\$'))
     
     html = f"""
     <div style="width: 100%; padding: 8px;">
+        <!-- Print Button -->
         <button id="printBtn_{voter_num}" onclick="printReceipt_{voter_num}()" style="
             width: 100%;
             padding: 14px 16px;
@@ -381,11 +532,13 @@ def create_qz_print_button_image(voter_num, html_content):
             transition: all 0.3s ease;
             box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
             margin-bottom: 10px;
-        " onmouseover="this.style.transform='translateY(-2px)'"
-           onmouseout="this.style.transform='translateY(0)'">
-            🖨️ Print Slip
+        " onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 20px rgba(102,126,234,.5)'"
+           onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='0 4px 15px rgba(102,126,234,.3)'">
+            🖨️ Print Slip<br>
+            <span style="font-size: 12px; opacity: 0.9; font-weight: 500;">(Thermal Printer)</span>
         </button>
         
+        <!-- Status Display -->
         <div id="status_{voter_num}" style="
             padding: 10px;
             border-radius: 6px;
@@ -396,105 +549,122 @@ def create_qz_print_button_image(voter_num, html_content):
         "></div>
     </div>
     
-    <script src="https://cdn.jsdelivr.net/npm/qz-tray@2.2.3/qz-tray.min.js"></script>
+    <!-- QZ Tray Library -->
+    <script src="https://cdn.jsdelivr.net/npm/qz-tray@2.2/qz-tray.min.js"></script>
     
     <script>
     (function() {{
-        // Reconstruct HTML from chunks
-        const htmlChunks = {chunks_js};
-        const htmlContent = htmlChunks.join('');
+        // HTML content for printing
+        const htmlContent = `{html_escaped}`;
         
         const statusDiv = document.getElementById('status_{voter_num}');
         const printBtn = document.getElementById('printBtn_{voter_num}');
         
-        function updateStatus(msg, type) {{
-            const colors = {{'info':'#3182ce','success':'#38a169','error':'#e53e3e','warning':'#d69e2e'}};
+        function updateStatus(message, type = 'info') {{
+            const colors = {{
+                'info': '#3182ce',
+                'success': '#38a169',
+                'error': '#e53e3e',
+                'warning': '#d69e2e'
+            }};
             statusDiv.style.display = 'block';
             statusDiv.style.background = colors[type] + '22';
             statusDiv.style.border = '2px solid ' + colors[type];
             statusDiv.style.color = colors[type];
-            statusDiv.innerHTML = msg;
+            statusDiv.innerHTML = message;
         }}
         
         window.printReceipt_{voter_num} = async function() {{
             try {{
+                // Disable button
                 printBtn.disabled = true;
                 printBtn.style.opacity = '0.6';
+                printBtn.style.cursor = 'not-allowed';
                 
-                updateStatus('🔌 Connecting...', 'info');
+                // Step 1: Connect to QZ Tray
+                updateStatus('🔌 Connecting to QZ Tray...', 'info');
                 
                 if (!qz.websocket.isActive()) {{
                     await qz.websocket.connect();
                 }}
                 
-                updateStatus('✅ Connected', 'success');
+                updateStatus('✅ Connected to QZ Tray', 'success');
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+                // Step 2: Find printer
+                updateStatus('🔍 Finding printer...', 'info');
                 
                 const printers = await qz.printers.find();
-                let printer = printers.find(p => p.toLowerCase().includes('zkteco')) || printers[0];
+                console.log('Available printers:', printers);
                 
-                updateStatus('🖨️ Rendering...', 'info');
+                // Look for 'zkteco' printer first
+                let targetPrinter = printers.find(p => 
+                    p.toLowerCase().includes('zkteco')
+                );
                 
-                const config = qz.configs.create(printer, {{
-                    units: 'mm'
-                }});
+                // If not found, use the first available printer
+                if (!targetPrinter) {{
+                    targetPrinter = printers[0];
+                    updateStatus(`⚠️ Using: ${{targetPrinter}}`, 'warning');
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                }} else {{
+                    updateStatus(`✅ Found: ${{targetPrinter}}`, 'success');
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                }}
                 
-                // Use pixel mode with the HTML content
-                const printData = [
-                    {{
-                        type: 'pixel',
-                        format: 'html',
-                        flavor: 'plain',
-                        data: htmlContent
-                    }},
-                    {{
-                        type: 'raw',
-                        format: 'command',
-                        data: '\\x1D\\x56\\x00'
-                    }}
-                ];
+                // Step 3: Configure printer
+                const config = qz.configs.create(targetPrinter);
                 
+                // Step 4: Prepare print data using PIXEL mode with HTML
+                const printData = [{{
+                    type: 'pixel',
+                    format: 'html',
+                    flavor: 'plain',
+                    data: htmlContent
+                }}];
+                
+                // Step 5: Send to printer
                 updateStatus('🖨️ Printing...', 'info');
+                
                 await qz.print(config, printData);
                 
-                updateStatus('✅ सफल!', 'success');
+                // Success
+                updateStatus('✅ Print successful! / मुद्रण सफल!', 'success');
                 
+                // Reset after 3 seconds
                 setTimeout(() => {{
                     printBtn.disabled = false;
                     printBtn.style.opacity = '1';
+                    printBtn.style.cursor = 'pointer';
                     statusDiv.style.display = 'none';
                 }}, 3000);
                 
             }} catch (err) {{
                 console.error('Print Error:', err);
-                let msg = '❌ Error: ';
-                if (err.message.includes('establish')) {{
-                    msg += 'Start QZ Tray!';
-                }} else if (err.message.includes('find')) {{
-                    msg += 'Turn ON printer';
-                }} else if (err.message.includes('Malformed')) {{
-                    msg += 'HTML issue. Using backup...';
-                    // Try simple text fallback
-                    setTimeout(() => window.printReceipt_{voter_num}_fallback(), 1000);
+                
+                // User-friendly error messages
+                let message = '❌ Error: ';
+                if (err.message && err.message.includes('establish')) {{
+                    message += 'QZ Tray is not running! Please start QZ Tray application.';
+                }} else if (err.message && err.message.includes('find')) {{
+                    message += 'Printer not found! Please check if printer is ON and connected.';
                 }} else {{
-                    msg += err.message.substring(0, 40);
+                    message += err.message || 'Unknown error occurred';
                 }}
-                updateStatus(msg, 'error');
+                
+                updateStatus(message + '<br><small>Check console (F12) for details</small>', 'error');
+                
+                // Re-enable button
                 printBtn.disabled = false;
                 printBtn.style.opacity = '1';
+                printBtn.style.cursor = 'pointer';
             }}
         }};
-        
-        // Fallback to simple text if image mode fails
-        window.printReceipt_{voter_num}_fallback = async function() {{
-            try {{
-                updateStatus('🔄 Trying text mode...', 'warning');
-                
-                const printers = await qz.printers.find();
-                let printer = printers.find(p => p.toLowerCase().includes('zkteco')) || printers[0];
-                
-                const config = qz.configs.create(printer);
-                
-                // Extract text from HTML
+    }})();
+    </script>
+    """
+    
+    return html
                 const tempDiv = document.createElement('div');
                 tempDiv.innerHTML = htmlContent;
                 const textContent = tempDiv.textContent || tempDiv.innerText;

@@ -1,8 +1,6 @@
 """
-Print Logic for 58mm Thermal Printer
-Paper width: 58mm
-Printable width: ~48mm
-Characters per line: 42
+Print Logic for 58mm/80mm Thermal Printer
+Updated with QZ Tray HTML support for Nepali text
 """
 
 import unicodedata
@@ -52,7 +50,7 @@ def format_divider(char='=', width=42):
 
 def format_voter_receipt(voter_data):
     """
-    Format voter data for 58mm thermal printer
+    Format voter data for 58mm thermal printer (text mode)
     
     Parameters:
     -----------
@@ -149,6 +147,186 @@ def format_voter_receipt(voter_data):
     
     # Join all lines
     return '\n'.join(lines)
+
+
+def format_voter_receipt_html(voter_data):
+    """
+    Format voter data as CLEAN HTML for QZ Tray pixel printing on 80mm thermal printer.
+    Optimized for Nepali (Devanagari) text rendering.
+    
+    Parameters:
+    -----------
+    voter_data : dict
+        Dictionary containing voter information
+    
+    Returns:
+    --------
+    str : HTML string optimized for 80mm thermal printer (72mm content width)
+    """
+    
+    # Get timestamp
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+    
+    # Extract data with normalization
+    serial_no = voter_data.get('सि.नं.', 'N/A')
+    voter_no = voter_data.get('मतदाता नं', 'N/A')
+    voter_name = normalize_text(voter_data.get('मतदाताको नाम', 'N/A'))
+    age = voter_data.get('उमेर(वर्ष)', 'N/A')
+    gender = voter_data.get('लिङ्ग', 'N/A')
+    parent_name = normalize_text(voter_data.get('पिता/माताको नाम', 'N/A'))
+    spouse_name = voter_data.get('पति/पत्नीको नाम', '')
+    
+    # Spouse row (only if exists and not empty/dash)
+    spouse_row = ""
+    if spouse_name and spouse_name.strip() and spouse_name.strip() != '-':
+        spouse_name = normalize_text(spouse_name)
+        spouse_row = f'<div class="info-row"><span class="label">पति/पत्नी:</span> <span class="value">{spouse_name}</span></div>'
+    
+    # Build HTML with proper structure for 80mm printer
+    html = f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        @page {{
+            size: 80mm auto;
+            margin: 0;
+        }}
+        body {{
+            width: 72mm;
+            font-family: Arial, sans-serif;
+            font-size: 11pt;
+            margin: 0;
+            padding: 4mm;
+            background: white;
+            color: black;
+            line-height: 1.4;
+        }}
+        .header {{
+            text-align: center;
+            border-bottom: 2px solid #000;
+            padding-bottom: 3mm;
+            margin-bottom: 4mm;
+        }}
+        .header-title {{
+            font-size: 16pt;
+            font-weight: bold;
+            margin-bottom: 2mm;
+        }}
+        .header-subtitle {{
+            font-size: 10pt;
+            color: #333;
+        }}
+        .serial-box {{
+            background: #f0f0f0;
+            border: 2px solid #000;
+            text-align: center;
+            padding: 3mm 0;
+            margin: 3mm 0;
+            font-size: 13pt;
+            font-weight: bold;
+        }}
+        .voter-number {{
+            text-align: center;
+            font-size: 16pt;
+            font-weight: bold;
+            padding: 3mm 0;
+            border-top: 1px dashed #666;
+            border-bottom: 1px dashed #666;
+            margin: 3mm 0;
+        }}
+        .info-section {{
+            margin: 3mm 0;
+        }}
+        .info-row {{
+            margin: 2mm 0;
+            padding: 1mm 0;
+        }}
+        .label {{
+            font-weight: bold;
+            display: inline-block;
+        }}
+        .value {{
+            display: inline;
+        }}
+        .inline-info {{
+            margin: 2mm 0;
+        }}
+        .signature-section {{
+            margin-top: 8mm;
+            padding-top: 3mm;
+            border-top: 1px solid #666;
+        }}
+        .signature-line {{
+            margin-top: 10mm;
+            padding-top: 2mm;
+            border-top: 1px dashed #000;
+            text-align: right;
+            font-size: 9pt;
+        }}
+        .footer {{
+            margin-top: 4mm;
+            padding-top: 3mm;
+            border-top: 1px solid #666;
+            text-align: center;
+            font-size: 9pt;
+        }}
+        .footer-time {{
+            margin-bottom: 2mm;
+            color: #555;
+        }}
+        .footer-thanks {{
+            font-weight: bold;
+        }}
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <div class="header">
+        <div class="header-title">मतदाता विवरण</div>
+        <div class="header-subtitle">VOTER DETAILS</div>
+    </div>
+    
+    <!-- Serial Number -->
+    <div class="serial-box">सि.नं.: {serial_no}</div>
+    
+    <!-- Voter Number (Prominent) -->
+    <div class="voter-number">मतदाता नं: {voter_no}</div>
+    
+    <!-- Voter Information -->
+    <div class="info-section">
+        <div class="info-row">
+            <span class="label">नाम:</span> <span class="value">{voter_name}</span>
+        </div>
+        
+        <div class="info-row inline-info">
+            <span class="label">उमेर:</span> {age} वर्ष | 
+            <span class="label">लिङ्ग:</span> {gender}
+        </div>
+        
+        <div class="info-row">
+            <span class="label">पिता/माता:</span> <span class="value">{parent_name}</span>
+        </div>
+        
+        {spouse_row}
+    </div>
+    
+    <!-- Signature Section -->
+    <div class="signature-section">
+        <div style="font-size: 9pt; margin-bottom: 2mm;">हस्ताक्षर / Signature:</div>
+        <div class="signature-line">_________________</div>
+    </div>
+    
+    <!-- Footer -->
+    <div class="footer">
+        <div class="footer-time">{timestamp}</div>
+        <div class="footer-thanks">धन्यवाद / Thank You</div>
+    </div>
+</body>
+</html>"""
+    
+    return html
 
 
 def create_print_preview(voter_data):
@@ -278,64 +456,6 @@ def format_compact_receipt(voter_data):
     lines.append("")
     
     return '\n'.join(lines)
-
-
-def format_voter_receipt_html(voter_data):
-    """
-    Format voter data as MINIMAL HTML for QZ Tray pixel printing.
-    Ultra-simple to avoid Malformed URL errors.
-    
-    Parameters:
-    -----------
-    voter_data : dict
-        Dictionary containing voter information
-    
-    Returns:
-    --------
-    str : Minimal HTML string
-    """
-    
-    # Get timestamp
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
-    
-    # Extract data
-    serial_no = voter_data.get('सि.नं.', 'N/A')
-    voter_no = voter_data.get('मतदाता नं', 'N/A')
-    voter_name = normalize_text(voter_data.get('मतदाताको नाम', 'N/A'))
-    age = voter_data.get('उमेर(वर्ष)', 'N/A')
-    gender = voter_data.get('लिङ्ग', 'N/A')
-    parent_name = normalize_text(voter_data.get('पिता/माताको नाम', 'N/A'))
-    spouse_name = voter_data.get('पति/पत्नीको नाम', '')
-    
-    # Spouse row
-    spouse_row = ""
-    if spouse_name and spouse_name.strip() and spouse_name.strip() != '-':
-        spouse_name = normalize_text(spouse_name)
-        spouse_row = f"<div><b>पति/पत्नी:</b> {spouse_name}</div>"
-    
-    # Ultra-minimal HTML
-    html = f"""<!DOCTYPE html>
-<html><head><meta charset="UTF-8"><style>
-body{{width:70mm;font-family:Arial;font-size:11pt;margin:0;padding:4mm;background:white;color:black}}
-.c{{text-align:center}}
-.h{{border-bottom:2px solid #000;padding-bottom:2mm;margin-bottom:3mm}}
-.s{{font-size:14pt;font-weight:bold;text-align:center;padding:2mm 0;background:#f0f0f0;border:2px solid #000;margin:2mm 0}}
-.v{{font-size:15pt;font-weight:bold;text-align:center;padding:2mm 0;border-top:1px dashed #666;border-bottom:1px dashed #666;margin:2mm 0}}
-.i{{margin:1.5mm 0;line-height:1.4}}
-.f{{margin-top:4mm;padding-top:2mm;border-top:1px solid #666;text-align:center;font-size:9pt}}
-b{{font-weight:bold}}
-</style></head><body>
-<div class="h c"><div style="font-size:14pt;font-weight:bold">मतदाता विवरण</div><div>VOTER DETAILS</div></div>
-<div class="s">सि.नं.: {serial_no}</div>
-<div class="v">मतदाता नं: {voter_no}</div>
-<div class="i"><b>नाम:</b> {voter_name}</div>
-<div class="i"><b>उमेर:</b> {age} वर्ष | <b>लिङ्ग:</b> {gender}</div>
-<div class="i"><b>पिता/माता:</b> {parent_name}</div>
-{spouse_row}
-<div class="f"><div>{timestamp}</div><div>धन्यवाद / Thank You</div></div>
-</body></html>"""
-    
-    return html
 
 
 # Test function
