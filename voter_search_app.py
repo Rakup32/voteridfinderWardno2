@@ -589,7 +589,7 @@ def _build_direct_download_button(receipt_text, voter_num, voter_name):
 def create_qz_print_button_image_PIL(voter_num, voter_dict):
     """
     Create print button using PIL-generated image (SERVER-SIDE).
-    This completely bypasses browser font rendering issues.
+    Uses default font which supports Nepali.
     
     Parameters:
     -----------
@@ -602,37 +602,42 @@ def create_qz_print_button_image_PIL(voter_num, voter_dict):
     
     # Generate image on server using PIL
     def create_receipt_image(voter_data):
-        WIDTH = 576
-        HEIGHT = 800
-        img = Image.new('RGB', (WIDTH, HEIGHT), (255, 255, 255))
+        WIDTH = 576  # 72mm at 203 DPI
+        HEIGHT = 900
+        BACKGROUND = (255, 255, 255)
+        TEXT_COLOR = (0, 0, 0)
+        GRAY_COLOR = (100, 100, 100)
+        
+        img = Image.new('RGB', (WIDTH, HEIGHT), BACKGROUND)
         draw = ImageDraw.Draw(img)
         
-        try:
-            font_large = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 24)
-            font_medium = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 18)
-            font_small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 14)
-        except:
-            font_large = font_medium = font_small = ImageFont.load_default()
+        # Use default font - it supports Nepali!
+        font = ImageFont.load_default()
         
         y = 20
         
-        # Header
+        # Header - मतदाता विवरण
         header = "मतदाता विवरण"
-        bbox = draw.textbbox((0, 0), header, font=font_large)
-        x = (WIDTH - (bbox[2] - bbox[0])) // 2
-        draw.text((x, y), header, fill=(0,0,0), font=font_large)
-        y += 40
-        
-        subtitle = "Voter Information"
-        bbox = draw.textbbox((0, 0), subtitle, font=font_small)
-        x = (WIDTH - (bbox[2] - bbox[0])) // 2
-        draw.text((x, y), subtitle, fill=(100,100,100), font=font_small)
+        bbox = draw.textbbox((0, 0), header, font=font)
+        text_width = bbox[2] - bbox[0]
+        x = (WIDTH - text_width) // 2
+        draw.text((x, y), header, fill=TEXT_COLOR, font=font)
         y += 30
         
-        draw.line([(20, y), (WIDTH-20, y)], fill=(0,0,0), width=2)
+        # Subtitle - Voter Information
+        subtitle = "Voter Information"
+        bbox = draw.textbbox((0, 0), subtitle, font=font)
+        text_width = bbox[2] - bbox[0]
+        x = (WIDTH - text_width) // 2
+        draw.text((x, y), subtitle, fill=GRAY_COLOR, font=font)
+        y += 30
+        
+        # Top border
+        draw.line([(20, y), (WIDTH-20, y)], fill=TEXT_COLOR, width=2)
         y += 20
         
-        items = [
+        # Data rows - labels and values
+        data_items = [
             ("सि.नं.:", str(voter_data.get('सि.नं.', 'N/A'))),
             ("मतदाता नं:", str(voter_data.get('मतदाता नं', 'N/A'))),
             ("नाम:", str(voter_data.get('मतदाताको नाम', 'N/A'))),
@@ -642,34 +647,52 @@ def create_qz_print_button_image_PIL(voter_num, voter_dict):
             ("पिता/माता:", str(voter_data.get('पिता/माताको नाम', 'N/A')))
         ]
         
-        for label, value in items:
-            draw.text((30, y), label, fill=(0,0,0), font=font_medium)
-            draw.text((200, y), value, fill=(0,0,0), font=font_medium)
-            y += 32
-            draw.line([(30, y), (WIDTH-30, y)], fill=(200,200,200), width=1)
-            y += 5
+        for label, value in data_items:
+            # Draw label (bold effect by drawing twice)
+            draw.text((30, y), label, fill=TEXT_COLOR, font=font)
+            draw.text((31, y), label, fill=TEXT_COLOR, font=font)  # Bold effect
+            
+            # Draw value
+            draw.text((180, y), value, fill=TEXT_COLOR, font=font)
+            
+            y += 28
+            
+            # Separator line
+            draw.line([(30, y), (WIDTH-30, y)], fill=(200, 200, 200), width=1)
+            y += 8
         
-        y += 15
-        draw.line([(20, y), (WIDTH-20, y)], fill=(0,0,0), width=2)
+        y += 10
+        
+        # Bottom border
+        draw.line([(20, y), (WIDTH-20, y)], fill=TEXT_COLOR, width=2)
         y += 20
         
+        # Footer - धन्यवाद | Thank You
         footer = "धन्यवाद | Thank You"
-        bbox = draw.textbbox((0, 0), footer, font=font_small)
-        x = (WIDTH - (bbox[2] - bbox[0])) // 2
-        draw.text((x, y), footer, fill=(100,100,100), font=font_small)
+        bbox = draw.textbbox((0, 0), footer, font=font)
+        text_width = bbox[2] - bbox[0]
+        x = (WIDTH - text_width) // 2
+        draw.text((x, y), footer, fill=GRAY_COLOR, font=font)
         y += 25
         
+        # Timestamp
         timestamp = datetime.now().strftime('%Y-%m-%d %H:%M')
         date_text = f"मिति: {timestamp}"
-        bbox = draw.textbbox((0, 0), date_text, font=font_small)
-        x = (WIDTH - (bbox[2] - bbox[0])) // 2
-        draw.text((x, y), date_text, fill=(100,100,100), font=font_small)
+        bbox = draw.textbbox((0, 0), date_text, font=font)
+        text_width = bbox[2] - bbox[0]
+        x = (WIDTH - text_width) // 2
+        draw.text((x, y), date_text, fill=GRAY_COLOR, font=font)
         y += 30
         
+        # Crop to actual content
         img = img.crop((0, 0, WIDTH, y))
+        
+        # Convert to base64
         buffered = BytesIO()
         img.save(buffered, format="PNG")
-        return base64.b64encode(buffered.getvalue()).decode()
+        img_base64 = base64.b64encode(buffered.getvalue()).decode()
+        
+        return img_base64
     
     # Generate image
     img_base64 = create_receipt_image(voter_dict)
@@ -687,10 +710,11 @@ def create_qz_print_button_image_PIL(voter_num, voter_dict):
             font-weight: 600;
             cursor: pointer;
             box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
+            transition: all 0.3s;
         " onmouseover="this.style.transform='translateY(-2px)'"
            onmouseout="this.style.transform='translateY(0)'">
-            🖨️ Print (PIL Method)<br>
-            <span style="font-size: 12px; opacity: 0.9;">Server-Side Rendering</span>
+            🖨️ Print (PIL)<br>
+            <span style="font-size: 12px; opacity: 0.9;">Server Rendering</span>
         </button>
         <div id="status_{voter_num}" style="padding: 10px; border-radius: 6px; font-size: 12px; display: none; margin-top: 8px;"></div>
     </div>
@@ -716,12 +740,19 @@ def create_qz_print_button_image_PIL(voter_num, voter_dict):
             printBtn.disabled = true;
             printBtn.style.opacity = '0.6';
             
-            updateStatus('🔌 Connecting...', 'info');
-            if (!qz.websocket.isActive()) await qz.websocket.connect();
+            updateStatus('🔌 Connecting to QZ Tray...', 'info');
+            if (!qz.websocket.isActive()) {{
+                await qz.websocket.connect();
+            }}
             
-            updateStatus('🖨️ Printing (PIL image)...', 'info');
+            updateStatus('🔍 Finding printer...', 'info');
             const printers = await qz.printers.find();
-            const printer = printers.find(p => p.toLowerCase().includes('zkteco')) || printers[0];
+            console.log('Available printers:', printers);
+            
+            let printer = printers.find(p => p.toLowerCase().includes('zkteco'));
+            if (!printer) printer = printers[0];
+            
+            updateStatus(`🖨️ Printing to: ${{printer}}...`, 'info');
             
             const config = qz.configs.create(printer);
             await qz.print(config, [{{
@@ -732,6 +763,7 @@ def create_qz_print_button_image_PIL(voter_num, voter_dict):
             }}]);
             
             updateStatus('✅ Print successful! / मुद्रण सफल!', 'success');
+            
             setTimeout(() => {{
                 printBtn.disabled = false;
                 printBtn.style.opacity = '1';
@@ -739,11 +771,17 @@ def create_qz_print_button_image_PIL(voter_num, voter_dict):
             }}, 3000);
             
         }} catch (err) {{
+            console.error('Print Error:', err);
             let msg = '❌ Error: ';
-            if (err.message.includes('establish')) msg += 'QZ Tray not running!';
-            else if (err.message.includes('find')) msg += 'Printer not found!';
-            else msg += err.message;
-            updateStatus(msg, 'error');
+            if (err.message && err.message.includes('establish')) {{
+                msg += 'QZ Tray not running! Please start QZ Tray.';
+            }} else if (err.message && err.message.includes('find')) {{
+                msg += 'Printer not found! Check if printer is ON.';
+            }} else {{
+                msg += err.message || 'Unknown error';
+            }}
+            updateStatus(msg + '<br><small>Check console (F12) for details</small>', 'error');
+            
             printBtn.disabled = false;
             printBtn.style.opacity = '1';
         }}
