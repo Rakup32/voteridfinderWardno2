@@ -611,30 +611,48 @@ def create_qz_print_button_image_PIL(voter_num, voter_dict):
         img = Image.new('RGB', (WIDTH, HEIGHT), BACKGROUND)
         draw = ImageDraw.Draw(img)
         
-        # Use default font - it supports Nepali!
-        font = ImageFont.load_default()
+        # Try to load a TrueType font at 12pt, fallback to default
+        try:
+            # Try Arial or other common fonts at 12pt
+            font_12pt = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 12)
+            font_14pt = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 14)
+            font_16pt = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 16)
+        except:
+            try:
+                # Windows font path
+                font_12pt = ImageFont.truetype("C:/Windows/Fonts/arial.ttf", 12)
+                font_14pt = ImageFont.truetype("C:/Windows/Fonts/arial.ttf", 14)
+                font_16pt = ImageFont.truetype("C:/Windows/Fonts/arialbd.ttf", 16)
+            except:
+                # Use default font as last resort
+                font_12pt = ImageFont.load_default()
+                font_14pt = ImageFont.load_default()
+                font_16pt = ImageFont.load_default()
         
-        y = 20
+        y = 25
         
-        # Header - मतदाता विवरण
+        # Header - मतदाता विवरण (16pt, bold)
         header = "मतदाता विवरण"
-        bbox = draw.textbbox((0, 0), header, font=font)
+        bbox = draw.textbbox((0, 0), header, font=font_16pt)
         text_width = bbox[2] - bbox[0]
         x = (WIDTH - text_width) // 2
-        draw.text((x, y), header, fill=TEXT_COLOR, font=font)
-        y += 30
+        draw.text((x, y), header, fill=TEXT_COLOR, font=font_16pt)
+        y += 40
         
-        # Subtitle - Voter Information
+        # Subtitle - Voter Information (12pt)
         subtitle = "Voter Information"
-        bbox = draw.textbbox((0, 0), subtitle, font=font)
+        bbox = draw.textbbox((0, 0), subtitle, font=font_12pt)
         text_width = bbox[2] - bbox[0]
         x = (WIDTH - text_width) // 2
-        draw.text((x, y), subtitle, fill=GRAY_COLOR, font=font)
-        y += 30
+        draw.text((x, y), subtitle, fill=GRAY_COLOR, font=font_12pt)
+        y += 35
         
         # Top border
         draw.line([(20, y), (WIDTH-20, y)], fill=TEXT_COLOR, width=2)
-        y += 20
+        y += 25
+        
+        # Store starting position for vertical divider
+        data_start_y = y
         
         # Data rows - labels and values
         data_items = [
@@ -648,18 +666,21 @@ def create_qz_print_button_image_PIL(voter_num, voter_dict):
         ]
         
         for label, value in data_items:
-            # Draw label (bold effect by drawing twice)
-            draw.text((30, y), label, fill=TEXT_COLOR, font=font)
-            draw.text((31, y), label, fill=TEXT_COLOR, font=font)  # Bold effect
+            # Draw label (left side, 12pt bold by drawing twice)
+            draw.text((35, y), label, fill=TEXT_COLOR, font=font_12pt)
+            draw.text((36, y), label, fill=TEXT_COLOR, font=font_12pt)  # Bold effect
             
-            # Draw value
-            draw.text((180, y), value, fill=TEXT_COLOR, font=font)
+            # Draw value (right side, 12pt)
+            draw.text((240, y), value, fill=TEXT_COLOR, font=font_12pt)
             
-            y += 28
+            y += 32  # Vertical space between rows (12pt + padding)
             
             # Separator line
             draw.line([(30, y), (WIDTH-30, y)], fill=(200, 200, 200), width=1)
-            y += 8
+            y += 8  # Space after separator
+        
+        # Draw vertical divider between labels and values
+        draw.line([(220, data_start_y), (220, y - 8)], fill=(220, 220, 220), width=1)
         
         y += 10
         
@@ -667,21 +688,21 @@ def create_qz_print_button_image_PIL(voter_num, voter_dict):
         draw.line([(20, y), (WIDTH-20, y)], fill=TEXT_COLOR, width=2)
         y += 20
         
-        # Footer - धन्यवाद | Thank You
+        # Footer - धन्यवाद | Thank You (12pt)
         footer = "धन्यवाद | Thank You"
-        bbox = draw.textbbox((0, 0), footer, font=font)
+        bbox = draw.textbbox((0, 0), footer, font=font_12pt)
         text_width = bbox[2] - bbox[0]
         x = (WIDTH - text_width) // 2
-        draw.text((x, y), footer, fill=GRAY_COLOR, font=font)
-        y += 25
+        draw.text((x, y), footer, fill=GRAY_COLOR, font=font_12pt)
+        y += 28
         
-        # Timestamp
+        # Timestamp (12pt)
         timestamp = datetime.now().strftime('%Y-%m-%d %H:%M')
         date_text = f"मिति: {timestamp}"
-        bbox = draw.textbbox((0, 0), date_text, font=font)
+        bbox = draw.textbbox((0, 0), date_text, font=font_12pt)
         text_width = bbox[2] - bbox[0]
         x = (WIDTH - text_width) // 2
-        draw.text((x, y), date_text, fill=GRAY_COLOR, font=font)
+        draw.text((x, y), date_text, fill=GRAY_COLOR, font=font_12pt)
         y += 30
         
         # Crop to actual content
