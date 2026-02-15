@@ -1,8 +1,15 @@
 """
-Print Logic for Voter Search App - Screenshot Method
-====================================================
-Generates compact HTML receipts optimized for html2canvas screenshot printing.
-Designed for 80mm thermal printers with proper Nepali font rendering.
+Print Logic Module - Screenshot-Based Printing for Nepali Text
+================================================================
+This module provides HTML receipt generation optimized for screenshot
+printing via html2canvas and QZ Tray.
+
+Key Features:
+- Compact 72mm layout for 80mm thermal printers
+- White background (critical for screenshot capture)
+- Nepali font support (Mangal)
+- No signature section
+- Minimal margins to save paper
 
 Author: Voter Search System
 Date: 2026-02-15
@@ -14,32 +21,21 @@ from typing import Dict, Any
 
 def format_voter_receipt_html(voter_data: Dict[str, Any]) -> str:
     """
-    Generate a compact HTML receipt for screenshot-based printing.
+    Generate compact HTML receipt for screenshot printing.
     
-    This HTML is designed to:
-    - Render properly in browser with Nepali fonts
-    - Be captured as PNG via html2canvas
-    - Print on 80mm thermal paper (72mm content width)
-    - Use minimal paper with tight spacing
+    This HTML is designed to be:
+    1. Rendered in browser
+    2. Captured as PNG via html2canvas
+    3. Sent to thermal printer via QZ Tray
     
     Args:
-        voter_data: Dictionary containing voter information with keys:
-            - 'सि.नं.' (Serial Number)
-            - 'मतदाता नं' (Voter Number)
-            - 'मतदाताको नाम' (Voter Name)
-            - 'उमेर(वर्ष)' (Age in Years)
-            - 'लिङ्ग' (Gender)
-            - 'पति/पत्नीको नाम' (Spouse Name)
-            - 'पिता/माताको नाम' (Father/Mother Name)
-    
+        voter_data: Dictionary containing voter information
+        
     Returns:
-        Complete HTML string with inline CSS, ready for screenshot
+        HTML string with inline CSS, optimized for 80mm thermal printer
     """
     
-    # Get current date in Nepali format
-    current_date = datetime.now().strftime("%Y-%m-%d")
-    
-    # Safely extract voter data with fallbacks
+    # Extract voter data with safe defaults
     serial_no = voter_data.get('सि.नं.', 'N/A')
     voter_no = voter_data.get('मतदाता नं', 'N/A')
     voter_name = voter_data.get('मतदाताको नाम', 'N/A')
@@ -48,13 +44,16 @@ def format_voter_receipt_html(voter_data: Dict[str, Any]) -> str:
     spouse_name = voter_data.get('पति/पत्नीको नाम', 'N/A')
     parent_name = voter_data.get('पिता/माताको नाम', 'N/A')
     
+    # Get current date in Nepali format
+    current_date = datetime.now().strftime('%Y-%m-%d %H:%M')
+    
     # Generate compact HTML with inline CSS
     html_content = f"""<!DOCTYPE html>
 <html lang="ne">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>मतदाता विवरण</title>
+    <title>मतदाता रसिद</title>
     <style>
         * {{
             margin: 0;
@@ -63,129 +62,132 @@ def format_voter_receipt_html(voter_data: Dict[str, Any]) -> str:
         }}
         
         body {{
-            font-family: 'Mangal', 'Noto Sans Devanagari', 'Arial', sans-serif;
-            background-color: #ffffff;
-            width: 72mm;
-            padding: 3mm;
             margin: 0;
-            color: #000000;
-        }}
-        
-        .receipt {{
-            width: 100%;
+            padding: 0;
             background-color: #ffffff;
         }}
         
-        .header {{
+        .receipt-container {{
+            width: 72mm;
+            background-color: #ffffff;
+            padding: 4mm 2mm;
+            font-family: 'Mangal', 'Noto Sans Devanagari', 'Arial', sans-serif;
+            color: #000000;
+            font-size: 11pt;
+            line-height: 1.3;
+        }}
+        
+        .receipt-header {{
             text-align: center;
             border-bottom: 2px solid #000000;
             padding-bottom: 3mm;
             margin-bottom: 3mm;
         }}
         
-        .header h1 {{
-            font-size: 18px;
+        .receipt-header h2 {{
+            font-size: 14pt;
             font-weight: bold;
-            margin-bottom: 2mm;
+            margin-bottom: 1mm;
         }}
         
-        .content {{
-            font-size: 12px;
-            line-height: 1.3;
-        }}
-        
-        .row {{
-            display: flex;
-            justify-content: space-between;
-            padding: 1.5mm 0;
-            border-bottom: 1px dashed #cccccc;
-        }}
-        
-        .row:last-child {{
-            border-bottom: none;
-        }}
-        
-        .label {{
-            font-weight: bold;
-            width: 45%;
+        .receipt-header .subtitle {{
+            font-size: 10pt;
             color: #333333;
         }}
         
-        .value {{
-            width: 55%;
-            text-align: right;
-            color: #000000;
+        .info-grid {{
+            margin: 2mm 0;
         }}
         
-        .footer {{
+        .info-row {{
+            display: flex;
+            padding: 1.5mm 0;
+            border-bottom: 1px solid #e0e0e0;
+        }}
+        
+        .info-row:last-child {{
+            border-bottom: none;
+        }}
+        
+        .info-label {{
+            width: 45%;
+            font-weight: bold;
+            font-size: 10pt;
+            color: #333333;
+        }}
+        
+        .info-value {{
+            width: 55%;
+            font-size: 10pt;
+            color: #000000;
+            word-wrap: break-word;
+        }}
+        
+        .receipt-footer {{
             margin-top: 4mm;
             padding-top: 3mm;
             border-top: 2px solid #000000;
             text-align: center;
-            font-size: 10px;
+            font-size: 9pt;
             color: #666666;
         }}
         
-        @media print {{
-            body {{
-                margin: 0;
-                padding: 3mm;
-            }}
-            
-            .receipt {{
-                page-break-after: avoid;
-            }}
+        .print-date {{
+            margin-top: 2mm;
+            font-size: 8pt;
         }}
     </style>
 </head>
 <body>
-    <div class="receipt">
+    <div class="receipt-container">
         <!-- Header Section -->
-        <div class="header">
-            <h1>मतदाता विवरण</h1>
+        <div class="receipt-header">
+            <h2>मतदाता विवरण</h2>
+            <div class="subtitle">Voter Information</div>
         </div>
         
-        <!-- Content Section -->
-        <div class="content">
-            <div class="row">
-                <span class="label">सि.नं.:</span>
-                <span class="value">{serial_no}</span>
+        <!-- Voter Information Grid -->
+        <div class="info-grid">
+            <div class="info-row">
+                <div class="info-label">सि.नं.:</div>
+                <div class="info-value">{serial_no}</div>
             </div>
             
-            <div class="row">
-                <span class="label">मतदाता नं:</span>
-                <span class="value">{voter_no}</span>
+            <div class="info-row">
+                <div class="info-label">मतदाता नं:</div>
+                <div class="info-value">{voter_no}</div>
             </div>
             
-            <div class="row">
-                <span class="label">मतदाताको नाम:</span>
-                <span class="value">{voter_name}</span>
+            <div class="info-row">
+                <div class="info-label">नाम:</div>
+                <div class="info-value">{voter_name}</div>
             </div>
             
-            <div class="row">
-                <span class="label">उमेर:</span>
-                <span class="value">{age} वर्ष</span>
+            <div class="info-row">
+                <div class="info-label">उमेर:</div>
+                <div class="info-value">{age} वर्ष</div>
             </div>
             
-            <div class="row">
-                <span class="label">लिङ्ग:</span>
-                <span class="value">{gender}</span>
+            <div class="info-row">
+                <div class="info-label">लिङ्ग:</div>
+                <div class="info-value">{gender}</div>
             </div>
             
-            <div class="row">
-                <span class="label">पति/पत्नीको नाम:</span>
-                <span class="value">{spouse_name}</span>
+            <div class="info-row">
+                <div class="info-label">पति/पत्नी:</div>
+                <div class="info-value">{spouse_name}</div>
             </div>
             
-            <div class="row">
-                <span class="label">पिता/माताको नाम:</span>
-                <span class="value">{parent_name}</span>
+            <div class="info-row">
+                <div class="info-label">पिता/माता:</div>
+                <div class="info-value">{parent_name}</div>
             </div>
         </div>
         
         <!-- Footer Section -->
-        <div class="footer">
-            <div>मिति: {current_date}</div>
+        <div class="receipt-footer">
+            <div>धन्यवाद | Thank You</div>
+            <div class="print-date">मिति: {current_date}</div>
         </div>
     </div>
 </body>
@@ -194,34 +196,63 @@ def format_voter_receipt_html(voter_data: Dict[str, Any]) -> str:
     return html_content
 
 
-def test_receipt_generation():
-    """Test function to verify receipt HTML generation."""
+def get_available_printers() -> list:
+    """
+    Placeholder function for printer discovery.
+    In production, this would query QZ Tray for available printers.
     
-    # Sample voter data
+    Returns:
+        List of available printer names
+    """
+    # This will be populated by QZ Tray in the frontend
+    return []
+
+
+def validate_printer_name(printer_name: str) -> bool:
+    """
+    Validate printer name format.
+    
+    Args:
+        printer_name: Name of the printer
+        
+    Returns:
+        True if valid, False otherwise
+    """
+    if not printer_name or not printer_name.strip():
+        return False
+    
+    # Basic validation - printer name should not be empty
+    return len(printer_name.strip()) > 0
+
+
+def test_receipt_generation():
+    """Test function to verify HTML generation."""
+    
     test_voter = {
-        'सि.नं.': '१',
-        'मतदाता नं': '१२३४५',
+        'सि.नं.': '1',
+        'मतदाता नं': '123456',
         'मतदाताको नाम': 'राम बहादुर श्रेष्ठ',
-        'उमेर(वर्ष)': '३५',
+        'उमेर(वर्ष)': '45',
         'लिङ्ग': 'पुरुष',
         'पति/पत्नीको नाम': 'सीता श्रेष्ठ',
         'पिता/माताको नाम': 'हरि बहादुर श्रेष्ठ'
     }
     
-    # Generate HTML
     html = format_voter_receipt_html(test_voter)
     
-    # Save to file for testing
-    with open('/home/claude/test_receipt.html', 'w', encoding='utf-8') as f:
-        f.write(html)
-    
-    print("✅ Test receipt generated successfully!")
-    print(f"📄 Saved to: test_receipt.html")
-    print(f"📏 HTML length: {len(html)} characters")
+    print("=" * 70)
+    print("TEST: HTML Receipt Generation")
+    print("=" * 70)
+    print("\nGenerated HTML:")
+    print(html)
+    print("\n" + "=" * 70)
+    print("✅ HTML generation successful!")
+    print(f"HTML length: {len(html)} characters")
+    print("=" * 70)
     
     return html
 
 
 if __name__ == "__main__":
-    # Run test
+    # Run test when module is executed directly
     test_receipt_generation()
