@@ -1091,7 +1091,7 @@ def show_results_table_with_print(data, columns):
                 st.markdown("---")
                 
                 # Original download button for thermal printer
-                receipt_text = format_voter_receipt(voter_dict)
+                receipt_text = format_voter_receipt_html(voter_dict)
                 download_button = _build_direct_download_button(receipt_text, voter_num, voter_name)
                 st.components.v1.html(download_button, height=120, scrolling=False)
 
