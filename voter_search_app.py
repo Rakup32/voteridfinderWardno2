@@ -608,8 +608,8 @@ def create_qz_print_button_image_PIL(voter_num, voter_dict):
         draw = ImageDraw.Draw(img)
         
         try:
-            font_large = ImageDraw.Font()
-           font_medium = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 18)
+            font_large = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 24)
+            font_medium = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 18)
             font_small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 14)
         except:
             font_large = font_medium = font_small = ImageFont.load_default()
