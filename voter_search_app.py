@@ -41,44 +41,88 @@ def _normalize_unicode(s):
 
 def print_receipt_qz_screenshot(printer_name, html):
     """
-    Print voter receipt using html2canvas screenshot method + QZ Tray.
-    FIXED VERSION: Proper UTF-8 encoding to prevent label corruption.
+    Print voter receipt using html2canvas - ULTIMATE FIX
+    
+    This version:
+    1. Preloads Nepali fonts from Google Fonts
+    2. Waits for fonts to fully load before screenshot
+    3. Uses proper UTF-8 encoding
+    4. Increased wait time for font rendering
     
     Parameters:
     -----------
     printer_name : str
-        Name of the thermal printer (e.g., 'ZKTeco ZKP8016')
+        Name of the thermal printer
     html_content : str
         HTML string from format_voter_receipt_html()
     """
     import base64
     import json
     
-    # Encode HTML as Base64 with proper UTF-8 handling
+    # Encode HTML as Base64
     html_bytes = html_content.encode('utf-8')
     html_base64 = base64.b64encode(html_bytes).decode('ascii')
     
-    # IMPORTANT: Escape printer name for JavaScript
-    printer_name_escaped = json.dumps(printer_name)[1:-1]  # Remove quotes
+    printer_name_escaped = json.dumps(printer_name)[1:-1]
     
-    # JavaScript code for screenshot printing with FIXED UTF-8 decoding
     screenshot_print_js = f"""
     <!DOCTYPE html>
     <html>
     <head>
         <meta charset="UTF-8">
         <title>Print Receipt</title>
+        
+        <!-- CRITICAL: Preload Nepali fonts from Google Fonts -->
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;700&display=swap" rel="stylesheet">
+        
         <script src="https://cdn.jsdelivr.net/npm/qz-tray@2.2/qz-tray.min.js"></script>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+        
         <style>
-            body {{ margin: 0; padding: 20px; background: #f5f5f5; font-family: Arial, sans-serif; }}
-            #status {{ text-align: center; padding: 30px; background: white; 
-                      border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,0.1); }}
-            .spinner {{ display: inline-block; width: 50px; height: 50px; 
-                       border: 5px solid #f3f3f3; border-top: 5px solid #2c5aa0; 
-                       border-radius: 50%; animation: spin 1s linear infinite; margin: 20px 0; }}
-            @keyframes spin {{ 0% {{ transform: rotate(0deg); }} 100% {{ transform: rotate(360deg); }} }}
-            #receipt-render {{ position: absolute; left: -9999px; top: 0; background: #ffffff; }}
+            /* Force Noto Sans Devanagari for ALL text */
+            * {{
+                font-family: 'Noto Sans Devanagari', 'Mangal', Arial, sans-serif !important;
+            }}
+            
+            body {{ 
+                margin: 0; 
+                padding: 20px; 
+                background: #f5f5f5; 
+            }}
+            
+            #status {{ 
+                text-align: center; 
+                padding: 30px; 
+                background: white; 
+                border-radius: 12px; 
+                box-shadow: 0 2px 12px rgba(0,0,0,0.1); 
+            }}
+            
+            .spinner {{ 
+                display: inline-block; 
+                width: 50px; 
+                height: 50px; 
+                border: 5px solid #f3f3f3; 
+                border-top: 5px solid #2c5aa0; 
+                border-radius: 50%; 
+                animation: spin 1s linear infinite; 
+                margin: 20px 0; 
+            }}
+            
+            @keyframes spin {{ 
+                0% {{ transform: rotate(0deg); }} 
+                100% {{ transform: rotate(360deg); }} 
+            }}
+            
+            #receipt-render {{ 
+                position: absolute; 
+                left: -9999px; 
+                top: 0; 
+                background: #ffffff; 
+            }}
+            
             .success {{ color: #10b981; font-weight: bold; }}
             .error {{ color: #ef4444; font-weight: bold; }}
             .step {{ color: #6b7280; margin: 10px 0; }}
@@ -89,6 +133,7 @@ def print_receipt_qz_screenshot(printer_name, html):
             <h2>🖨️ मुद्रण प्रक्रिया / Printing Process</h2>
             <div class="spinner" id="spinner"></div>
             <div id="message" class="step">Initializing...</div>
+            <div id="debug" style="font-size: 11px; color: #999; margin-top: 10px;"></div>
         </div>
         <div id="receipt-render"></div>
         
@@ -107,62 +152,97 @@ def print_receipt_qz_screenshot(printer_name, html):
                 console.log(`[${{type.toUpperCase()}}] ${{message}}`);
             }}
             
-            // FIXED: Proper UTF-8 decoding from Base64
+            function updateDebug(message) {{
+                const debugEl = document.getElementById('debug');
+                debugEl.textContent = message;
+                console.log('[DEBUG]', message);
+            }}
+            
+            // Proper UTF-8 Base64 decoding
             function base64DecodeUnicode(base64) {{
-                // Convert Base64 to binary string
                 const binaryString = atob(base64);
-                
-                // Convert binary string to byte array
                 const bytes = new Uint8Array(binaryString.length);
                 for (let i = 0; i < binaryString.length; i++) {{
                     bytes[i] = binaryString.charCodeAt(i);
                 }}
-                
-                // Decode as UTF-8
                 const decoder = new TextDecoder('utf-8');
                 return decoder.decode(bytes);
             }}
             
+            // Wait for fonts to load
+            async function waitForFonts() {{
+                updateDebug('Waiting for fonts to load...');
+                
+                try {{
+                    // Check if Font Loading API is available
+                    if (document.fonts && document.fonts.ready) {{
+                        await document.fonts.ready;
+                        console.log('✅ Fonts loaded via Font Loading API');
+                    }} else {{
+                        // Fallback: wait 2 seconds
+                        await new Promise(resolve => setTimeout(resolve, 2000));
+                        console.log('⚠️ Font Loading API not available, waited 2s');
+                    }}
+                    
+                    // Additional wait to ensure rendering
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    updateDebug('Fonts ready!');
+                    
+                }} catch (error) {{
+                    console.error('Font loading error:', error);
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                }}
+            }}
+            
             async function executePrint() {{
                 try {{
-                    // Step 1: Decode HTML with proper UTF-8 handling
-                    updateStatus('Step 1/5: Decoding HTML (UTF-8)...');
+                    // Step 1: Decode HTML
+                    updateStatus('Step 1/6: Decoding HTML (UTF-8)...');
                     const html = base64DecodeUnicode(HTML_BASE64);
-                    console.log('✅ HTML decoded with UTF-8');
-                    console.log('HTML preview:', html.substring(0, 200));
+                    console.log('✅ HTML decoded:', html.length, 'characters');
                     
                     // Step 2: Render HTML
-                    updateStatus('Step 2/5: Rendering receipt...');
+                    updateStatus('Step 2/6: Rendering receipt...');
                     const container = document.getElementById('receipt-render');
                     container.innerHTML = html;
+                    console.log('✅ HTML injected into DOM');
                     
-                    // Wait for fonts to load
-                    await new Promise(resolve => setTimeout(resolve, 800));
-                    console.log('✅ HTML rendered, fonts loaded');
+                    // Step 3: Wait for fonts (CRITICAL!)
+                    updateStatus('Step 3/6: Loading Nepali fonts...');
+                    await waitForFonts();
+                    console.log('✅ Fonts loaded and ready');
                     
-                    // Step 3: Capture screenshot
-                    updateStatus('Step 3/5: Capturing screenshot...');
+                    // Step 4: Capture screenshot
+                    updateStatus('Step 4/6: Capturing high-quality screenshot...');
+                    updateDebug('Rendering with html2canvas...');
+                    
                     const canvas = await html2canvas(container, {{
-                        scale: 2,
+                        scale: 3,  // Higher quality
                         backgroundColor: '#ffffff',
-                        logging: false,
+                        logging: true,  // Enable logging for debugging
                         useCORS: true,
-                        allowTaint: true
+                        allowTaint: true,
+                        foreignObjectRendering: false,  // Better compatibility
+                        imageTimeout: 0,
+                        removeContainer: false
                     }});
+                    
                     console.log('✅ Screenshot captured:', canvas.width + 'x' + canvas.height);
+                    updateDebug('Canvas: ' + canvas.width + 'x' + canvas.height + 'px');
                     
                     const imageData = canvas.toDataURL('image/png');
                     const base64Image = imageData.split(',')[1];
+                    console.log('✅ Image encoded, size:', base64Image.length, 'bytes');
                     
-                    // Step 4: Connect to QZ Tray
-                    updateStatus('Step 4/5: Connecting to QZ Tray...');
+                    // Step 5: Connect to QZ Tray
+                    updateStatus('Step 5/6: Connecting to QZ Tray...');
                     if (!qz.websocket.isActive()) {{
                         await qz.websocket.connect();
                     }}
                     console.log('✅ QZ Tray connected');
                     
-                    // Step 5: Print
-                    updateStatus('Step 5/5: Sending to printer...');
+                    // Step 6: Print
+                    updateStatus('Step 6/6: Sending to printer...');
                     const config = qz.configs.create(PRINTER_NAME);
                     const data = [{{
                         type: 'pixel',
@@ -172,20 +252,23 @@ def print_receipt_qz_screenshot(printer_name, html):
                     }}];
                     
                     await qz.print(config, data);
-                    console.log('✅ Print job sent');
+                    console.log('✅ Print job sent successfully');
                     
                     updateStatus('✅ मुद्रण सफल भयो! / Print successful!', 'success');
+                    updateDebug('Receipt printed successfully!');
                     
                 }} catch (error) {{
                     updateStatus('❌ त्रुटि: ' + error.message, 'error');
+                    updateDebug('Error: ' + error.message);
                     console.error('Print failed:', error);
-                    console.error('Error stack:', error.stack);
+                    console.error('Stack:', error.stack);
                 }}
             }}
             
-            // Execute when page loads
+            // Start when page and fonts are loaded
             window.addEventListener('load', () => {{
-                console.log('🖨️ Print script loaded');
+                console.log('🖨️ Print page loaded');
+                updateDebug('Initializing...');
                 setTimeout(executePrint, 500);
             }});
         </script>
@@ -193,7 +276,7 @@ def print_receipt_qz_screenshot(printer_name, html):
     </html>
     """
     
-    st.components.v1.html(screenshot_print_js, height=300, scrolling=False)
+    st.components.v1.html(screenshot_print_js, height=350, scrolling=False)
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
