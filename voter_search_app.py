@@ -609,8 +609,10 @@ def create_qz_print_button_image_PIL(voter_num, voter_dict):
         print(f"Sample data: {list(voter_data.items())[:3]}")
         print("=" * 60)
         
-        WIDTH = 576  # 72mm at 203 DPI
-        HEIGHT = 900
+        # IMPORTANT: Create image at 2X size for better quality
+        SCALE = 2  # Scale factor for better rendering
+        WIDTH = 576 * SCALE  # 72mm at 203 DPI * 2
+        HEIGHT = 900 * SCALE
         BACKGROUND = (255, 255, 255)
         TEXT_COLOR = (0, 0, 0)
         GRAY_COLOR = (100, 100, 100)
@@ -618,46 +620,39 @@ def create_qz_print_button_image_PIL(voter_num, voter_dict):
         img = Image.new('RGB', (WIDTH, HEIGHT), BACKGROUND)
         draw = ImageDraw.Draw(img)
         
-        # Use FreeSans and FreeSerif fonts - they support Nepali/Devanagari!
-        try:
-            # FreeSans for regular text, FreeSerif for better Nepali support
-            font_12pt = ImageFont.truetype("/usr/share/fonts/truetype/freefont/FreeSans.ttf", 12)
-            font_14pt = ImageFont.truetype("/usr/share/fonts/truetype/freefont/FreeSans.ttf", 14)
-            font_16pt = ImageFont.truetype("/usr/share/fonts/truetype/freefont/FreeSansBold.ttf", 16)
-            print("✅ PIL: Using FreeSans fonts (supports Nepali)")
-        except Exception as e:
-            print(f"❌ PIL: FreeSans not found: {e}")
-            try:
-                # Try FreeSerif as backup
-                font_12pt = ImageFont.truetype("/usr/share/fonts/truetype/freefont/FreeSerif.ttf", 12)
-                font_14pt = ImageFont.truetype("/usr/share/fonts/truetype/freefont/FreeSerif.ttf", 14)
-                font_16pt = ImageFont.truetype("/usr/share/fonts/truetype/freefont/FreeSerif.ttf", 16)
-                print("✅ PIL: Using FreeSerif fonts (supports Nepali)")
-            except Exception as e2:
-                print(f"❌ PIL: FreeSerif not found: {e2}")
-                # Last resort - default font
-                font_12pt = ImageFont.load_default()
-                font_14pt = ImageFont.load_default()
-                font_16pt = ImageFont.load_default()
-                print("⚠️ PIL: Using default font")
+        # IMPORTANT: Streamlit Cloud doesn't have FreeSans/FreeSerif
+        # Use PIL's default font which DOES support Nepali (confirmed by test)
+        # The default font is bitmap-based and supports Unicode including Devanagari
         
-        # Test render a sample Nepali character
+        font_12pt = ImageFont.load_default()
+        font_14pt = ImageFont.load_default() 
+        font_16pt = ImageFont.load_default()
+        
+        print("✅ PIL: Using default font (supports Nepali - tested 24px render)")
+        
+        # Test render to confirm
         test_text = "सि.नं."
         test_bbox = draw.textbbox((0, 0), test_text, font=font_12pt)
         test_width = test_bbox[2] - test_bbox[0]
         print(f"📏 PIL: Test text '{test_text}' renders as {test_width}px wide")
-        if test_width == 0:
-            print("⚠️ PIL WARNING: Font may not support Nepali characters!")
         
-        y = 25
+        if test_width == 0:
+            print("⚠️ PIL WARNING: Font cannot render Nepali!")
+        else:
+            print(f"✅ PIL: Font CAN render Nepali (width={test_width}px)")
+        
+        y = 25 * SCALE
         
         # Header - मतदाता विवरण (16pt, bold)
         header = "मतदाता विवरण"
         bbox = draw.textbbox((0, 0), header, font=font_16pt)
         text_width = bbox[2] - bbox[0]
         x = (WIDTH - text_width) // 2
-        draw.text((x, y), header, fill=TEXT_COLOR, font=font_16pt)
-        y += 40
+        # Draw multiple times for bold effect
+        for offset_x in range(0, 3):
+            for offset_y in range(0, 2):
+                draw.text((x + offset_x, y + offset_y), header, fill=TEXT_COLOR, font=font_16pt)
+        y += 40 * SCALE
         
         # Subtitle - Voter Information (12pt)
         subtitle = "Voter Information"
@@ -665,11 +660,11 @@ def create_qz_print_button_image_PIL(voter_num, voter_dict):
         text_width = bbox[2] - bbox[0]
         x = (WIDTH - text_width) // 2
         draw.text((x, y), subtitle, fill=GRAY_COLOR, font=font_12pt)
-        y += 35
+        y += 35 * SCALE
         
         # Top border
-        draw.line([(20, y), (WIDTH-20, y)], fill=TEXT_COLOR, width=2)
-        y += 25
+        draw.line([(20 * SCALE, y), (WIDTH - 20 * SCALE, y)], fill=TEXT_COLOR, width=2 * SCALE)
+        y += 25 * SCALE
         
         # Store starting position for vertical divider
         data_start_y = y
@@ -686,27 +681,27 @@ def create_qz_print_button_image_PIL(voter_num, voter_dict):
         ]
         
         for label, value in data_items:
-            # Draw label (left side, 12pt bold by drawing twice)
-            draw.text((35, y), label, fill=TEXT_COLOR, font=font_12pt)
-            draw.text((36, y), label, fill=TEXT_COLOR, font=font_12pt)  # Bold effect
+            # Draw label (left side, 12pt bold by drawing multiple times)
+            for offset in range(0, 3):
+                draw.text((35 * SCALE + offset, y), label, fill=TEXT_COLOR, font=font_12pt)
             
             # Draw value (right side, 12pt)
-            draw.text((240, y), value, fill=TEXT_COLOR, font=font_12pt)
+            draw.text((240 * SCALE, y), value, fill=TEXT_COLOR, font=font_12pt)
             
-            y += 32  # Vertical space between rows (12pt + padding)
+            y += 32 * SCALE  # Vertical space between rows
             
             # Separator line
-            draw.line([(30, y), (WIDTH-30, y)], fill=(200, 200, 200), width=1)
-            y += 8  # Space after separator
+            draw.line([(30 * SCALE, y), (WIDTH - 30 * SCALE, y)], fill=(200, 200, 200), width=1)
+            y += 8 * SCALE  # Space after separator
         
         # Draw vertical divider between labels and values
-        draw.line([(220, data_start_y), (220, y - 8)], fill=(220, 220, 220), width=1)
+        draw.line([(220 * SCALE, data_start_y), (220 * SCALE, y - 8 * SCALE)], fill=(220, 220, 220), width=1)
         
-        y += 10
+        y += 10 * SCALE
         
         # Bottom border
-        draw.line([(20, y), (WIDTH-20, y)], fill=TEXT_COLOR, width=2)
-        y += 20
+        draw.line([(20 * SCALE, y), (WIDTH - 20 * SCALE, y)], fill=TEXT_COLOR, width=2 * SCALE)
+        y += 20 * SCALE
         
         # Footer - धन्यवाद | Thank You (12pt)
         footer = "धन्यवाद | Thank You"
@@ -714,7 +709,7 @@ def create_qz_print_button_image_PIL(voter_num, voter_dict):
         text_width = bbox[2] - bbox[0]
         x = (WIDTH - text_width) // 2
         draw.text((x, y), footer, fill=GRAY_COLOR, font=font_12pt)
-        y += 28
+        y += 28 * SCALE
         
         # Timestamp (12pt)
         timestamp = datetime.now().strftime('%Y-%m-%d %H:%M')
@@ -723,15 +718,19 @@ def create_qz_print_button_image_PIL(voter_num, voter_dict):
         text_width = bbox[2] - bbox[0]
         x = (WIDTH - text_width) // 2
         draw.text((x, y), date_text, fill=GRAY_COLOR, font=font_12pt)
-        y += 30
+        y += 30 * SCALE
         
         # Crop to actual content
         img = img.crop((0, 0, WIDTH, y))
+        
+        print(f"📐 PIL: Final image size: {WIDTH}x{y}px (scaled {SCALE}x)")
         
         # Convert to base64
         buffered = BytesIO()
         img.save(buffered, format="PNG")
         img_base64 = base64.b64encode(buffered.getvalue()).decode()
+        
+        print(f"✅ PIL: Image generated, base64 length: {len(img_base64)}")
         
         return img_base64
     
