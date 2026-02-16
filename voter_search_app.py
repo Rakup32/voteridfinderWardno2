@@ -611,23 +611,28 @@ def create_qz_print_button_image_PIL(voter_num, voter_dict):
         img = Image.new('RGB', (WIDTH, HEIGHT), BACKGROUND)
         draw = ImageDraw.Draw(img)
         
-        # Try to load a TrueType font at 12pt, fallback to default
+        # Use FreeSans and FreeSerif fonts - they support Nepali/Devanagari!
         try:
-            # Try Arial or other common fonts at 12pt
-            font_12pt = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 12)
-            font_14pt = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 14)
-            font_16pt = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 16)
-        except:
+            # FreeSans for regular text, FreeSerif for better Nepali support
+            font_12pt = ImageFont.truetype("/usr/share/fonts/truetype/freefont/FreeSans.ttf", 12)
+            font_14pt = ImageFont.truetype("/usr/share/fonts/truetype/freefont/FreeSans.ttf", 14)
+            font_16pt = ImageFont.truetype("/usr/share/fonts/truetype/freefont/FreeSansBold.ttf", 16)
+            print("✅ Using FreeSans fonts (supports Nepali)")
+        except Exception as e:
+            print(f"❌ FreeSans not found: {e}")
             try:
-                # Windows font path
-                font_12pt = ImageFont.truetype("C:/Windows/Fonts/arial.ttf", 12)
-                font_14pt = ImageFont.truetype("C:/Windows/Fonts/arial.ttf", 14)
-                font_16pt = ImageFont.truetype("C:/Windows/Fonts/arialbd.ttf", 16)
-            except:
-                # Use default font as last resort
+                # Try FreeSerif as backup
+                font_12pt = ImageFont.truetype("/usr/share/fonts/truetype/freefont/FreeSerif.ttf", 12)
+                font_14pt = ImageFont.truetype("/usr/share/fonts/truetype/freefont/FreeSerif.ttf", 14)
+                font_16pt = ImageFont.truetype("/usr/share/fonts/truetype/freefont/FreeSerif.ttf", 16)
+                print("✅ Using FreeSerif fonts (supports Nepali)")
+            except Exception as e2:
+                print(f"❌ FreeSerif not found: {e2}")
+                # Last resort - default font
                 font_12pt = ImageFont.load_default()
                 font_14pt = ImageFont.load_default()
                 font_16pt = ImageFont.load_default()
+                print("⚠️ Using default font")
         
         y = 25
         
