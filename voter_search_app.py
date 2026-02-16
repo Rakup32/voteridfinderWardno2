@@ -602,6 +602,13 @@ def create_qz_print_button_image_PIL(voter_num, voter_dict):
     
     # Generate image on server using PIL
     def create_receipt_image(voter_data):
+        # DEBUG: Print voter data to console
+        print("=" * 60)
+        print("DEBUG: Creating receipt image")
+        print(f"Voter data keys: {list(voter_data.keys())}")
+        print(f"Sample data: {list(voter_data.items())[:3]}")
+        print("=" * 60)
+        
         WIDTH = 576  # 72mm at 203 DPI
         HEIGHT = 900
         BACKGROUND = (255, 255, 255)
@@ -617,22 +624,30 @@ def create_qz_print_button_image_PIL(voter_num, voter_dict):
             font_12pt = ImageFont.truetype("/usr/share/fonts/truetype/freefont/FreeSans.ttf", 12)
             font_14pt = ImageFont.truetype("/usr/share/fonts/truetype/freefont/FreeSans.ttf", 14)
             font_16pt = ImageFont.truetype("/usr/share/fonts/truetype/freefont/FreeSansBold.ttf", 16)
-            print("✅ Using FreeSans fonts (supports Nepali)")
+            print("✅ PIL: Using FreeSans fonts (supports Nepali)")
         except Exception as e:
-            print(f"❌ FreeSans not found: {e}")
+            print(f"❌ PIL: FreeSans not found: {e}")
             try:
                 # Try FreeSerif as backup
                 font_12pt = ImageFont.truetype("/usr/share/fonts/truetype/freefont/FreeSerif.ttf", 12)
                 font_14pt = ImageFont.truetype("/usr/share/fonts/truetype/freefont/FreeSerif.ttf", 14)
                 font_16pt = ImageFont.truetype("/usr/share/fonts/truetype/freefont/FreeSerif.ttf", 16)
-                print("✅ Using FreeSerif fonts (supports Nepali)")
+                print("✅ PIL: Using FreeSerif fonts (supports Nepali)")
             except Exception as e2:
-                print(f"❌ FreeSerif not found: {e2}")
+                print(f"❌ PIL: FreeSerif not found: {e2}")
                 # Last resort - default font
                 font_12pt = ImageFont.load_default()
                 font_14pt = ImageFont.load_default()
                 font_16pt = ImageFont.load_default()
-                print("⚠️ Using default font")
+                print("⚠️ PIL: Using default font")
+        
+        # Test render a sample Nepali character
+        test_text = "सि.नं."
+        test_bbox = draw.textbbox((0, 0), test_text, font=font_12pt)
+        test_width = test_bbox[2] - test_bbox[0]
+        print(f"📏 PIL: Test text '{test_text}' renders as {test_width}px wide")
+        if test_width == 0:
+            print("⚠️ PIL WARNING: Font may not support Nepali characters!")
         
         y = 25
         
