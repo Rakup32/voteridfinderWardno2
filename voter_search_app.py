@@ -24,10 +24,7 @@ import base64
 import time
 import extra_streamlit_components as stx
 from credentials import USERNAME, PASSWORD
-from print_logic import format_voter_receipt_html
-from PIL import Image, ImageDraw, ImageFont
-from io import BytesIO
-
+from print_logic import format_voter_receipt, format_voter_receipt_html
 
 # ============================================================================
 # IMPORT NEPALI CONVERTER
@@ -42,244 +39,157 @@ def _normalize_unicode(s):
     return unicodedata.normalize("NFC", s.strip().lower())
 
 
-def print_receipt_qz_screenshot(printer_name, html):
+def print_receipt_qz(printer_name, html_content):
     """
-    Print voter receipt using html2canvas - ULTIMATE FIX
-    
-    This version:
-    1. Preloads Nepali fonts from Google Fonts
-    2. Waits for fonts to fully load before screenshot
-    3. Uses proper UTF-8 encoding
-    4. Increased wait time for font rendering
+    Print voter receipt using QZ Tray with pixel/HTML rendering.
+    This function injects JavaScript that connects to QZ Tray and sends HTML to the printer.
     
     Parameters:
     -----------
     printer_name : str
-        Name of the thermal printer
+        Name of the thermal printer (e.g., 'zkteco')
     html_content : str
-        HTML string from format_voter_receipt_html()
+        HTML string to print (from format_voter_receipt_html)
     """
-    import base64
-    import json
+    import html as html_module
     
-    # Encode HTML as Base64
-    html_bytes = html_content.encode('utf-8')
-    html_base64 = base64.b64encode(html_bytes).decode('ascii')
+    # Escape the HTML content for JavaScript
+    escaped_html = html_module.escape(html_content).replace('\n', '\\n').replace("'", "\\'")
     
-    printer_name_escaped = json.dumps(printer_name)[1:-1]
-    
-    screenshot_print_js = f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <meta charset="UTF-8">
-        <title>Print Receipt</title>
-        
-        <!-- CRITICAL: Preload Nepali fonts from Google Fonts -->
-        <link rel="preconnect" href="https://fonts.googleapis.com">
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;700&display=swap" rel="stylesheet">
-        
-        <script src="https://cdn.jsdelivr.net/npm/qz-tray@2.2/qz-tray.min.js"></script>
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-        
-        <style>
-            /* Force Noto Sans Devanagari for ALL text */
-            * {{
-                font-family: 'Noto Sans Devanagari', 'Mangal', Arial, sans-serif !important;
-            }}
+    # JavaScript code to connect to QZ Tray and print
+    qz_print_js = f"""
+    <script src="https://cdn.jsdelivr.net/npm/qz-tray@2.2/qz-tray.min.js"></script>
+    <script>
+        (function() {{
+            console.log('🖨️ QZ Tray Print Script Loaded');
             
-            body {{ 
-                margin: 0; 
-                padding: 20px; 
-                background: #f5f5f5; 
-            }}
+            // Configuration
+            const PRINTER_NAME = "{printer_name}";
+            const HTML_CONTENT = `{escaped_html}`;
             
-            #status {{ 
-                text-align: center; 
-                padding: 30px; 
-                background: white; 
-                border-radius: 12px; 
-                box-shadow: 0 2px 12px rgba(0,0,0,0.1); 
-            }}
-            
-            .spinner {{ 
-                display: inline-block; 
-                width: 50px; 
-                height: 50px; 
-                border: 5px solid #f3f3f3; 
-                border-top: 5px solid #2c5aa0; 
-                border-radius: 50%; 
-                animation: spin 1s linear infinite; 
-                margin: 20px 0; 
-            }}
-            
-            @keyframes spin {{ 
-                0% {{ transform: rotate(0deg); }} 
-                100% {{ transform: rotate(360deg); }} 
-            }}
-            
-            #receipt-render {{ 
-                position: absolute; 
-                left: -9999px; 
-                top: 0; 
-                background: #ffffff; 
-            }}
-            
-            .success {{ color: #10b981; font-weight: bold; }}
-            .error {{ color: #ef4444; font-weight: bold; }}
-            .step {{ color: #6b7280; margin: 10px 0; }}
-        </style>
-    </head>
-    <body>
-        <div id="status">
-            <h2>🖨️ मुद्रण प्रक्रिया / Printing Process</h2>
-            <div class="spinner" id="spinner"></div>
-            <div id="message" class="step">Initializing...</div>
-            <div id="debug" style="font-size: 11px; color: #999; margin-top: 10px;"></div>
-        </div>
-        <div id="receipt-render"></div>
-        
-        <script>
-            const PRINTER_NAME = "{printer_name_escaped}";
-            const HTML_BASE64 = "{html_base64}";
-            
-            function updateStatus(message, type = 'step') {{
-                const msgEl = document.getElementById('message');
-                const spinner = document.getElementById('spinner');
-                msgEl.textContent = message;
-                msgEl.className = type;
-                if (type === 'success' || type === 'error') {{
-                    spinner.style.display = 'none';
-                }}
-                console.log(`[${{type.toUpperCase()}}] ${{message}}`);
-            }}
-            
-            function updateDebug(message) {{
-                const debugEl = document.getElementById('debug');
-                debugEl.textContent = message;
-                console.log('[DEBUG]', message);
-            }}
-            
-            // Proper UTF-8 Base64 decoding
-            function base64DecodeUnicode(base64) {{
-                const binaryString = atob(base64);
-                const bytes = new Uint8Array(binaryString.length);
-                for (let i = 0; i < binaryString.length; i++) {{
-                    bytes[i] = binaryString.charCodeAt(i);
-                }}
-                const decoder = new TextDecoder('utf-8');
-                return decoder.decode(bytes);
-            }}
-            
-            // Wait for fonts to load
-            async function waitForFonts() {{
-                updateDebug('Waiting for fonts to load...');
-                
-                try {{
-                    // Check if Font Loading API is available
-                    if (document.fonts && document.fonts.ready) {{
-                        await document.fonts.ready;
-                        console.log('✅ Fonts loaded via Font Loading API');
+            // Connect to QZ Tray
+            function connectQZ() {{
+                return new Promise((resolve, reject) => {{
+                    if (qz.websocket.isActive()) {{
+                        console.log('✅ QZ Tray already connected');
+                        resolve();
                     }} else {{
-                        // Fallback: wait 2 seconds
-                        await new Promise(resolve => setTimeout(resolve, 2000));
-                        console.log('⚠️ Font Loading API not available, waited 2s');
+                        console.log('🔌 Connecting to QZ Tray...');
+                        qz.websocket.connect()
+                            .then(() => {{
+                                console.log('✅ QZ Tray connected successfully');
+                                resolve();
+                            }})
+                            .catch((err) => {{
+                                console.error('❌ QZ Tray connection failed:', err);
+                                reject(err);
+                            }});
                     }}
-                    
-                    // Additional wait to ensure rendering
-                    await new Promise(resolve => setTimeout(resolve, 1000));
-                    updateDebug('Fonts ready!');
-                    
-                }} catch (error) {{
-                    console.error('Font loading error:', error);
-                    await new Promise(resolve => setTimeout(resolve, 2000));
-                }}
+                }});
             }}
             
-            async function executePrint() {{
-                try {{
-                    // Step 1: Decode HTML
-                    updateStatus('Step 1/6: Decoding HTML (UTF-8)...');
-                    const html = base64DecodeUnicode(HTML_BASE64);
-                    console.log('✅ HTML decoded:', html.length, 'characters');
+            // Find printer
+            function findPrinter() {{
+                return new Promise((resolve, reject) => {{
+                    qz.printers.find(PRINTER_NAME)
+                        .then((found) => {{
+                            console.log('✅ Printer found:', found);
+                            resolve(found);
+                        }})
+                        .catch((err) => {{
+                            console.error('❌ Printer not found:', err);
+                            reject(err);
+                        }});
+                }});
+            }}
+            
+            // Print using pixel/HTML mode
+            function printHTML(printerName) {{
+                return new Promise((resolve, reject) => {{
+                    // Configure print data for pixel/HTML rendering
+                    const config = qz.configs.create(printerName);
                     
-                    // Step 2: Render HTML
-                    updateStatus('Step 2/6: Rendering receipt...');
-                    const container = document.getElementById('receipt-render');
-                    container.innerHTML = html;
-                    console.log('✅ HTML injected into DOM');
-                    
-                    // Step 3: Wait for fonts (CRITICAL!)
-                    updateStatus('Step 3/6: Loading Nepali fonts...');
-                    await waitForFonts();
-                    console.log('✅ Fonts loaded and ready');
-                    
-                    // Step 4: Capture screenshot
-                    updateStatus('Step 4/6: Capturing high-quality screenshot...');
-                    updateDebug('Rendering with html2canvas...');
-                    
-                    const canvas = await html2canvas(container, {{
-                        scale: 3,  // Higher quality
-                        backgroundColor: '#ffffff',
-                        logging: true,  // Enable logging for debugging
-                        useCORS: true,
-                        allowTaint: true,
-                        foreignObjectRendering: false,  // Better compatibility
-                        imageTimeout: 0,
-                        removeContainer: false
-                    }});
-                    
-                    console.log('✅ Screenshot captured:', canvas.width + 'x' + canvas.height);
-                    updateDebug('Canvas: ' + canvas.width + 'x' + canvas.height + 'px');
-                    
-                    const imageData = canvas.toDataURL('image/png');
-                    const base64Image = imageData.split(',')[1];
-                    console.log('✅ Image encoded, size:', base64Image.length, 'bytes');
-                    
-                    // Step 5: Connect to QZ Tray
-                    updateStatus('Step 5/6: Connecting to QZ Tray...');
-                    if (!qz.websocket.isActive()) {{
-                        await qz.websocket.connect();
-                    }}
-                    console.log('✅ QZ Tray connected');
-                    
-                    // Step 6: Print
-                    updateStatus('Step 6/6: Sending to printer...');
-                    const config = qz.configs.create(PRINTER_NAME);
                     const data = [{{
                         type: 'pixel',
-                        format: 'image',
-                        flavor: 'base64',
-                        data: base64Image
+                        format: 'html',
+                        flavor: 'plain',
+                        data: HTML_CONTENT
                     }}];
                     
-                    await qz.print(config, data);
-                    console.log('✅ Print job sent successfully');
+                    console.log('🖨️ Sending print job to:', printerName);
                     
-                    updateStatus('✅ मुद्रण सफल भयो! / Print successful!', 'success');
-                    updateDebug('Receipt printed successfully!');
+                    qz.print(config, data)
+                        .then(() => {{
+                            console.log('✅ Print job sent successfully');
+                            resolve();
+                        }})
+                        .catch((err) => {{
+                            console.error('❌ Print job failed:', err);
+                            reject(err);
+                        }});
+                }});
+            }}
+            
+            // Main execution
+            async function executePrint() {{
+                try {{
+                    // Step 1: Connect to QZ Tray
+                    await connectQZ();
+                    
+                    // Step 2: Find printer
+                    const printer = await findPrinter();
+                    
+                    // Step 3: Print
+                    await printHTML(printer);
+                    
+                    // Step 4: Show success message to user
+                    console.log('✅ Print completed successfully!');
+                    
+                    // Send success message to Streamlit
+                    window.parent.postMessage({{
+                        type: 'streamlit:setComponentValue',
+                        data: {{status: 'success', message: 'Print job sent successfully'}}
+                    }}, '*');
                     
                 }} catch (error) {{
-                    updateStatus('❌ त्रुटि: ' + error.message, 'error');
-                    updateDebug('Error: ' + error.message);
-                    console.error('Print failed:', error);
-                    console.error('Stack:', error.stack);
+                    console.error('❌ Print process failed:', error);
+                    
+                    // Send error message to Streamlit
+                    window.parent.postMessage({{
+                        type: 'streamlit:setComponentValue',
+                        data: {{status: 'error', message: error.message || 'Print failed'}}
+                    }}, '*');
                 }}
             }}
             
-            // Start when page and fonts are loaded
-            window.addEventListener('load', () => {{
-                console.log('🖨️ Print page loaded');
-                updateDebug('Initializing...');
-                setTimeout(executePrint, 500);
-            }});
-        </script>
-    </body>
-    </html>
+            // Execute when DOM is ready
+            if (document.readyState === 'loading') {{
+                document.addEventListener('DOMContentLoaded', executePrint);
+            }} else {{
+                executePrint();
+            }}
+        }})();
+    </script>
+    <div style="padding: 20px; text-align: center; font-family: Arial, sans-serif;">
+        <h3 style="color: #2c5aa0;">🖨️ Printing...</h3>
+        <p>Connecting to QZ Tray and sending print job to <strong>{printer_name}</strong></p>
+        <div style="margin-top: 20px;">
+            <div style="display: inline-block; width: 40px; height: 40px; border: 4px solid #f3f3f3; border-top: 4px solid #2c5aa0; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+        </div>
+        <style>
+            @keyframes spin {{
+                0% {{ transform: rotate(0deg); }}
+                100% {{ transform: rotate(360deg); }}
+            }}
+        </style>
+        <p style="margin-top: 20px; font-size: 14px; color: #666;">
+            Check console for status messages
+        </p>
+    </div>
     """
     
-    st.components.v1.html(screenshot_print_js, height=350, scrolling=False)
+    # Display the component (will execute the print)
+    st.components.v1.html(qz_print_js, height=200, scrolling=False)
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -586,261 +496,175 @@ def _build_direct_download_button(receipt_text, voter_num, voter_name):
 </div>
 """
 
-def create_qz_print_button_image_PIL(voter_num, voter_dict):
+def create_qz_print_button_image(voter_num, html_content):
     """
-    Create print button using PIL-generated image (SERVER-SIDE).
-    Uses default font which supports Nepali.
+    Create print button using QZ Tray PIXEL mode with HTML rendering.
+    Optimized for 80mm thermal printers with Nepali (Devanagari) text.
     
     Parameters:
     -----------
     voter_num : int/str
-        Voter number
-    voter_dict : dict
-        Voter data dictionary
+        Voter number for identification
+    html_content : str
+        HTML content from format_voter_receipt_html() function
     """
-    from datetime import datetime
+    import json
     
-    # Generate image on server using PIL
-    def create_receipt_image(voter_data):
-        # DEBUG: Print voter data to console
-        print("=" * 60)
-        print("DEBUG: Creating receipt image")
-        print(f"Voter data keys: {list(voter_data.keys())}")
-        print(f"Sample data: {list(voter_data.items())[:3]}")
-        print("=" * 60)
-        
-        # IMPORTANT: Create image at 2X size for better quality
-        SCALE = 2  # Scale factor for better rendering
-        WIDTH = 576 * SCALE  # 72mm at 203 DPI * 2
-        HEIGHT = 900 * SCALE
-        BACKGROUND = (255, 255, 255)
-        TEXT_COLOR = (0, 0, 0)
-        GRAY_COLOR = (100, 100, 100)
-        
-        img = Image.new('RGB', (WIDTH, HEIGHT), BACKGROUND)
-        draw = ImageDraw.Draw(img)
-        
-        # IMPORTANT: Streamlit Cloud doesn't have FreeSans/FreeSerif
-        # Use PIL's default font which DOES support Nepali (confirmed by test)
-        # The default font is bitmap-based and supports Unicode including Devanagari
-        
-        font_12pt = ImageFont.load_default()
-        font_14pt = ImageFont.load_default() 
-        font_16pt = ImageFont.load_default()
-        
-        print("✅ PIL: Using default font (supports Nepali - tested 24px render)")
-        
-        # Test render to confirm
-        test_text = "सि.नं."
-        test_bbox = draw.textbbox((0, 0), test_text, font=font_12pt)
-        test_width = test_bbox[2] - test_bbox[0]
-        print(f"📏 PIL: Test text '{test_text}' renders as {test_width}px wide")
-        
-        if test_width == 0:
-            print("⚠️ PIL WARNING: Font cannot render Nepali!")
-        else:
-            print(f"✅ PIL: Font CAN render Nepali (width={test_width}px)")
-        
-        y = 25 * SCALE
-        
-        # Header - मतदाता विवरण (16pt, bold)
-        header = "मतदाता विवरण"
-        bbox = draw.textbbox((0, 0), header, font=font_16pt)
-        text_width = bbox[2] - bbox[0]
-        x = (WIDTH - text_width) // 2
-        # Draw multiple times for bold effect
-        for offset_x in range(0, 3):
-            for offset_y in range(0, 2):
-                draw.text((x + offset_x, y + offset_y), header, fill=TEXT_COLOR, font=font_16pt)
-        y += 40 * SCALE
-        
-        # Subtitle - Voter Information (12pt)
-        subtitle = "Voter Information"
-        bbox = draw.textbbox((0, 0), subtitle, font=font_12pt)
-        text_width = bbox[2] - bbox[0]
-        x = (WIDTH - text_width) // 2
-        draw.text((x, y), subtitle, fill=GRAY_COLOR, font=font_12pt)
-        y += 35 * SCALE
-        
-        # Top border
-        draw.line([(20 * SCALE, y), (WIDTH - 20 * SCALE, y)], fill=TEXT_COLOR, width=2 * SCALE)
-        y += 25 * SCALE
-        
-        # Store starting position for vertical divider
-        data_start_y = y
-        
-        # Data rows - labels and values
-        data_items = [
-            ("सि.नं.:", str(voter_data.get('सि.नं.', 'N/A'))),
-            ("मतदाता नं:", str(voter_data.get('मतदाता नं', 'N/A'))),
-            ("नाम:", str(voter_data.get('मतदाताको नाम', 'N/A'))),
-            ("उमेर:", f"{voter_data.get('उमेर(वर्ष)', 'N/A')} वर्ष"),
-            ("लिङ्ग:", str(voter_data.get('लिङ्ग', 'N/A'))),
-            ("पति/पत्नी:", str(voter_data.get('पति/पत्नीको नाम', 'N/A'))),
-            ("पिता/माता:", str(voter_data.get('पिता/माताको नाम', 'N/A')))
-        ]
-        
-        for label, value in data_items:
-            # Draw label (left side, 12pt bold by drawing multiple times)
-            for offset in range(0, 3):
-                draw.text((35 * SCALE + offset, y), label, fill=TEXT_COLOR, font=font_12pt)
-            
-            # Draw value (right side, 12pt)
-            draw.text((240 * SCALE, y), value, fill=TEXT_COLOR, font=font_12pt)
-            
-            y += 32 * SCALE  # Vertical space between rows
-            
-            # Separator line
-            draw.line([(30 * SCALE, y), (WIDTH - 30 * SCALE, y)], fill=(200, 200, 200), width=1)
-            y += 8 * SCALE  # Space after separator
-        
-        # Draw vertical divider between labels and values
-        draw.line([(220 * SCALE, data_start_y), (220 * SCALE, y - 8 * SCALE)], fill=(220, 220, 220), width=1)
-        
-        y += 10 * SCALE
-        
-        # Bottom border
-        draw.line([(20 * SCALE, y), (WIDTH - 20 * SCALE, y)], fill=TEXT_COLOR, width=2 * SCALE)
-        y += 20 * SCALE
-        
-        # Footer - धन्यवाद | Thank You (12pt)
-        footer = "धन्यवाद | Thank You"
-        bbox = draw.textbbox((0, 0), footer, font=font_12pt)
-        text_width = bbox[2] - bbox[0]
-        x = (WIDTH - text_width) // 2
-        draw.text((x, y), footer, fill=GRAY_COLOR, font=font_12pt)
-        y += 28 * SCALE
-        
-        # Timestamp (12pt)
-        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M')
-        date_text = f"मिति: {timestamp}"
-        bbox = draw.textbbox((0, 0), date_text, font=font_12pt)
-        text_width = bbox[2] - bbox[0]
-        x = (WIDTH - text_width) // 2
-        draw.text((x, y), date_text, fill=GRAY_COLOR, font=font_12pt)
-        y += 30 * SCALE
-        
-        # Crop to actual content
-        img = img.crop((0, 0, WIDTH, y))
-        
-        print(f"📐 PIL: Final image size: {WIDTH}x{y}px (scaled {SCALE}x)")
-        
-        # Convert to base64 with optimized settings for thermal printers
-        buffered = BytesIO()
-        # Save as PNG with NO compression for better compatibility
-        img.save(buffered, format="PNG", compress_level=0, optimize=False)
-        img_base64 = base64.b64encode(buffered.getvalue()).decode()
-        
-        print(f"✅ PIL: Image generated, base64 length: {len(img_base64)}")
-        print(f"💾 PIL: Image format: PNG (no compression, {img.mode} mode)")
-        
-        return img_base64
-    
-    # Generate image
-    img_base64 = create_receipt_image(voter_dict)
+    # Escape HTML content for JavaScript (simple and safe)
+    html_escaped = (html_content
+                   .replace('\\', '\\\\')
+                   .replace('`', '\\`')
+                   .replace('$', '\\$'))
     
     html = f"""
     <div style="width: 100%; padding: 8px;">
+        <!-- Print Button -->
         <button id="printBtn_{voter_num}" onclick="printReceipt_{voter_num}()" style="
             width: 100%;
             padding: 14px 16px;
-            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
             border: none;
             border-radius: 8px;
             font-size: 15px;
             font-weight: 600;
             cursor: pointer;
-            box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
-            transition: all 0.3s;
-        " onmouseover="this.style.transform='translateY(-2px)'"
-           onmouseout="this.style.transform='translateY(0)'">
-            🖨️ Print (PIL)<br>
-            <span style="font-size: 12px; opacity: 0.9;">Server Rendering</span>
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+            margin-bottom: 10px;
+        " onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 20px rgba(102,126,234,.5)'"
+           onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='0 4px 15px rgba(102,126,234,.3)'">
+            🖨️ Print Slip<br>
+            <span style="font-size: 12px; opacity: 0.9; font-weight: 500;">(Thermal Printer)</span>
         </button>
-        <div id="status_{voter_num}" style="padding: 10px; border-radius: 6px; font-size: 12px; display: none; margin-top: 8px;"></div>
+        
+        <!-- Status Display -->
+        <div id="status_{voter_num}" style="
+            padding: 10px;
+            border-radius: 6px;
+            font-size: 12px;
+            line-height: 1.4;
+            display: none;
+            margin-top: 8px;
+        "></div>
     </div>
     
+    <!-- QZ Tray Library -->
     <script src="https://cdn.jsdelivr.net/npm/qz-tray@2.2/qz-tray.min.js"></script>
-    <script>
-    const PIL_IMAGE_{voter_num} = "{img_base64}";
     
-    window.printReceipt_{voter_num} = async function() {{
+    <script>
+    (function() {{
+        // HTML content for printing
+        const htmlContent = `{html_escaped}`;
+        
         const statusDiv = document.getElementById('status_{voter_num}');
         const printBtn = document.getElementById('printBtn_{voter_num}');
         
-        function updateStatus(msg, type) {{
-            const colors = {{'info': '#3182ce', 'success': '#10b981', 'error': '#e53e3e'}};
+        function updateStatus(message, type = 'info') {{
+            const colors = {{
+                'info': '#3182ce',
+                'success': '#38a169',
+                'error': '#e53e3e',
+                'warning': '#d69e2e'
+            }};
             statusDiv.style.display = 'block';
             statusDiv.style.background = colors[type] + '22';
             statusDiv.style.border = '2px solid ' + colors[type];
             statusDiv.style.color = colors[type];
-            statusDiv.innerHTML = msg;
+            statusDiv.innerHTML = message;
         }}
         
-        try {{
-            printBtn.disabled = true;
-            printBtn.style.opacity = '0.6';
-            
-            updateStatus('🔌 Connecting to QZ Tray...', 'info');
-            if (!qz.websocket.isActive()) {{
-                await qz.websocket.connect();
-            }}
-            
-            updateStatus('🔍 Finding printer...', 'info');
-            const printers = await qz.printers.find();
-            console.log('Available printers:', printers);
-            
-            let printer = printers.find(p => p.toLowerCase().includes('zkteco'));
-            if (!printer) printer = printers[0];
-            
-            updateStatus(`🖨️ Printing to: ${{printer}}...`, 'info');
-            
-            // Configure for thermal printer - NO smoothing, sharp pixels
-            const config = qz.configs.create(printer, {{
-                scaleContent: false,
-                rasterize: true,
-                interpolation: 'nearest-neighbor'
-            }});
-            
-            await qz.print(config, [{{
-                type: 'pixel',
-                format: 'image',
-                flavor: 'base64',
-                data: PIL_IMAGE_{voter_num}
-            }}]);
-            
-            updateStatus('✅ Print successful! / मुद्रण सफल!', 'success');
-            
-            setTimeout(() => {{
+        window.printReceipt_{voter_num} = async function() {{
+            try {{
+                // Disable button
+                printBtn.disabled = true;
+                printBtn.style.opacity = '0.6';
+                printBtn.style.cursor = 'not-allowed';
+                
+                // Step 1: Connect to QZ Tray
+                updateStatus('🔌 Connecting to QZ Tray...', 'info');
+                
+                if (!qz.websocket.isActive()) {{
+                    await qz.websocket.connect();
+                }}
+                
+                updateStatus('✅ Connected to QZ Tray', 'success');
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+                // Step 2: Find printer
+                updateStatus('🔍 Finding printer...', 'info');
+                
+                const printers = await qz.printers.find();
+                console.log('Available printers:', printers);
+                
+                // Look for 'zkteco' printer first
+                let targetPrinter = printers.find(p => 
+                    p.toLowerCase().includes('zkteco')
+                );
+                
+                // If not found, use the first available printer
+                if (!targetPrinter) {{
+                    targetPrinter = printers[0];
+                    updateStatus(`⚠️ Using: ${{targetPrinter}}`, 'warning');
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                }} else {{
+                    updateStatus(`✅ Found: ${{targetPrinter}}`, 'success');
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                }}
+                
+                // Step 3: Configure printer
+                const config = qz.configs.create(targetPrinter);
+                
+                // Step 4: Prepare print data using PIXEL mode with HTML
+                const printData = [{{
+                    type: 'pixel',
+                    format: 'html',
+                    flavor: 'plain',
+                    data: htmlContent
+                }}];
+                
+                // Step 5: Send to printer
+                updateStatus('🖨️ Printing...', 'info');
+                
+                await qz.print(config, printData);
+                
+                // Success
+                updateStatus('✅ Print successful! / मुद्रण सफल!', 'success');
+                
+                // Reset after 3 seconds
+                setTimeout(() => {{
+                    printBtn.disabled = false;
+                    printBtn.style.opacity = '1';
+                    printBtn.style.cursor = 'pointer';
+                    statusDiv.style.display = 'none';
+                }}, 3000);
+                
+            }} catch (err) {{
+                console.error('Print Error:', err);
+                
+                // User-friendly error messages
+                let message = '❌ Error: ';
+                if (err.message && err.message.includes('establish')) {{
+                    message += 'QZ Tray is not running! Please start QZ Tray application.';
+                }} else if (err.message && err.message.includes('find')) {{
+                    message += 'Printer not found! Please check if printer is ON and connected.';
+                }} else {{
+                    message += err.message || 'Unknown error occurred';
+                }}
+                
+                updateStatus(message + '<br><small>Check console (F12) for details</small>', 'error');
+                
+                // Re-enable button
                 printBtn.disabled = false;
                 printBtn.style.opacity = '1';
-                statusDiv.style.display = 'none';
-            }}, 3000);
-            
-        }} catch (err) {{
-            console.error('Print Error:', err);
-            let msg = '❌ Error: ';
-            if (err.message && err.message.includes('establish')) {{
-                msg += 'QZ Tray not running! Please start QZ Tray.';
-            }} else if (err.message && err.message.includes('find')) {{
-                msg += 'Printer not found! Check if printer is ON.';
-            }} else {{
-                msg += err.message || 'Unknown error';
+                printBtn.style.cursor = 'pointer';
             }}
-            updateStatus(msg + '<br><small>Check console (F12) for details</small>', 'error');
-            
-            printBtn.disabled = false;
-            printBtn.style.opacity = '1';
-        }}
-    }};
+        }};
+    }})();
     </script>
     """
+    
     return html
-
-def create_qz_print_button_image(voter_num, html_content):
-    """DEPRECATED: Old HTML method - kept for compatibility"""
-    return create_qz_print_button_image_PIL(voter_num, {})
 
 
 def create_qz_print_button_text(voter_num, voter_name, age, gender, parent, spouse):
@@ -1261,13 +1085,13 @@ def show_results_table_with_print(data, columns):
                 html_receipt = format_voter_receipt_html(voter_dict)
                 
                 # Print Slip button using IMAGE mode (renders HTML as image)
-                print_button_html = create_qz_print_button_image_PIL(voter_num, voter_dict)
+                print_button_html = create_qz_print_button_image(voter_num, html_receipt)
                 st.components.v1.html(print_button_html, height=180, scrolling=False)
                 
                 st.markdown("---")
                 
                 # Original download button for thermal printer
-                receipt_text = format_voter_receipt_html(voter_dict)
+                receipt_text = format_voter_receipt(voter_dict)
                 download_button = _build_direct_download_button(receipt_text, voter_num, voter_name)
                 st.components.v1.html(download_button, height=120, scrolling=False)
 
