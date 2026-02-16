@@ -725,12 +725,14 @@ def create_qz_print_button_image_PIL(voter_num, voter_dict):
         
         print(f"📐 PIL: Final image size: {WIDTH}x{y}px (scaled {SCALE}x)")
         
-        # Convert to base64
+        # Convert to base64 with optimized settings for thermal printers
         buffered = BytesIO()
-        img.save(buffered, format="PNG")
+        # Save as PNG with NO compression for better compatibility
+        img.save(buffered, format="PNG", compress_level=0, optimize=False)
         img_base64 = base64.b64encode(buffered.getvalue()).decode()
         
         print(f"✅ PIL: Image generated, base64 length: {len(img_base64)}")
+        print(f"💾 PIL: Image format: PNG (no compression, {img.mode} mode)")
         
         return img_base64
     
@@ -794,7 +796,13 @@ def create_qz_print_button_image_PIL(voter_num, voter_dict):
             
             updateStatus(`🖨️ Printing to: ${{printer}}...`, 'info');
             
-            const config = qz.configs.create(printer);
+            // Configure for thermal printer - NO smoothing, sharp pixels
+            const config = qz.configs.create(printer, {{
+                scaleContent: false,
+                rasterize: true,
+                interpolation: 'nearest-neighbor'
+            }});
+            
             await qz.print(config, [{{
                 type: 'pixel',
                 format: 'image',
