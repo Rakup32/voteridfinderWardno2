@@ -1,178 +1,483 @@
-# -*- coding: utf-8 -*-
 """
-Print Logic for ZKP8016 Thermal Printer
-UPDATED: Hybrid Version (Fixes ImportError + Solves Box Issue)
+Print Logic for 58mm/80mm Thermal Printer
+Updated with QZ Tray HTML support for Nepali text
 """
 
 import unicodedata
 from datetime import datetime
 import streamlit as st
-from PIL import Image, ImageDraw, ImageFont
-import os
-import io
 
-# --- CONFIGURATION ---
-PRINTER_WIDTH = 576 
-FONT_PATH = "Kalimati.otf"
 
-# --- 1. SAFE LABELS (Unicode Encoded) ---
-# Prevents "Box" issues even if file encoding is wrong
-L_HEADER = "\u092e\u0924\u0926\u093e\u0924\u093e \u0935\u093f\u0935\u0930\u0923"
-L_SERIAL = "\u0938\u093f.\u0928\u0902."
-L_VOTER_NO = "\u092e\u0924\u0926\u093e\u0924\u093e \u0928\u0902"
-L_NAME = "\u0928\u093e\u092e"
-L_PARENTS = "\u092a\u093f\u0924\u093e/\u092e\u093e\u0924\u093e"
-L_SPOUSE = "\u092a\u0924\u093f/\u092a\u0924\u094d\u0928\u0940"
-L_AGE = "\u0909\u092e\u0947\u0930"
-L_GENDER = "\u0932\u093f\u0919\u094d\u0917"
-
-# --- 2. IMAGE GENERATION LOGIC (The Fix) ---
 def normalize_text(text):
+    """Normalize text for consistent display"""
     if not isinstance(text, str):
         text = str(text)
     return unicodedata.normalize('NFC', text.strip())
 
-def get_font(size):
-    try:
-        return ImageFont.truetype(FONT_PATH, size)
-    except OSError:
-        return ImageFont.load_default()
 
-def draw_text_wrapped(draw, text, x, y, font, max_width):
+def center_text(text, width=42):
+    """Center text within specified width"""
+    text = str(text)
+    padding = (width - len(text)) // 2
+    return ' ' * padding + text
+
+
+def split_text(text, width=42):
+    """Split text into lines of specified width"""
+    text = str(text)
     lines = []
     words = text.split()
-    current_line = []
+    current_line = ""
+    
     for word in words:
-        test_line = ' '.join(current_line + [word])
-        bbox = draw.textbbox((0, 0), test_line, font=font)
-        w = bbox[2] - bbox[0]
-        if w <= max_width:
-            current_line.append(word)
+        if len(current_line + word) + 1 <= width:
+            current_line += word + " "
         else:
-            lines.append(' '.join(current_line))
-            current_line = [word]
-    lines.append(' '.join(current_line))
+            if current_line:
+                lines.append(current_line.strip())
+            current_line = word + " "
     
-    current_y = y
-    bbox = font.getbbox("Ay")
-    line_height = (bbox[3] - bbox[1]) + 10 
+    if current_line:
+        lines.append(current_line.strip())
     
-    for line in lines:
-        draw.text((x, current_y), line, font=font, fill=0)
-        current_y += line_height
-    return current_y
+    return lines
 
-def create_receipt_image(voter_data):
-    # Setup Canvas
-    width = PRINTER_WIDTH
-    height = 1000
-    image = Image.new('1', (width, height), 255)
-    draw = ImageDraw.Draw(image)
-    
-    font_header = get_font(32)
-    font_sub = get_font(22)
-    font_body = get_font(20)
-    
-    y = 20
-    
-    # Header
-    w = draw.textbbox((0, 0), L_HEADER, font=font_header)[2]
-    draw.text(((width - w) / 2, y), L_HEADER, font=font_header, fill=0)
-    y += 45
-    
-    subtitle = "VOTER DETAILS"
-    w = draw.textbbox((0, 0), subtitle, font=font_sub)[2]
-    draw.text(((width - w) / 2, y), subtitle, font=font_sub, fill=0)
-    y += 40
-    
-    draw.line([(10, y), (width - 10, y)], fill=0, width=3)
-    y += 20
-    
-    # Data
-    if 'सि.नं.' in voter_data:
-        text = f"{L_SERIAL}: {voter_data['सि.नं.']}"
-        draw.text((20, y), text, font=font_body, fill=0)
-        y += 35
 
-    if 'मतदाता नं' in voter_data:
-        text = f"{L_VOTER_NO}: {voter_data['मतदाता नं']}"
-        draw.text((20, y), text, font=font_header, fill=0)
-        y += 45
-        
-    draw.line([(10, y), (width - 10, y)], fill=0, width=1)
-    y += 20
-    
-    if 'मतदाताको नाम' in voter_data:
-        draw.text((20, y), f"{L_NAME}:", font=font_body, fill=0)
-        y += 30
-        name = normalize_text(voter_data['मतदाताको नाम'])
-        y = draw_text_wrapped(draw, name, 40, y, font_header, width - 50)
-        y += 10
+def format_divider(char='=', width=42):
+    """Create a divider line"""
+    return char * width
 
-    if 'पिता/माताको नाम' in voter_data:
-        draw.text((20, y), f"{L_PARENTS}:", font=font_body, fill=0)
-        y += 30
-        parent = normalize_text(voter_data['पिता/माताको नाम'])
-        y = draw_text_wrapped(draw, parent, 40, y, font_body, width - 50)
-        y += 10
-        
-    if 'पति/पत्नीको नाम' in voter_data and voter_data['पति/पत्नीको नाम'] != '-':
-        draw.text((20, y), f"{L_SPOUSE}:", font=font_body, fill=0)
-        y += 30
-        spouse = normalize_text(voter_data['पति/पत्नीको नाम'])
-        y = draw_text_wrapped(draw, spouse, 40, y, font_body, width - 50)
-        y += 10
-
-    info_line = []
-    if 'उमेर(वर्ष)' in voter_data:
-        info_line.append(f"{L_AGE}: {voter_data['उमेर(वर्ष)']}")
-    if 'लिङ्ग' in voter_data:
-        info_line.append(f"{L_GENDER}: {voter_data['लिङ्ग']}")
-    
-    if info_line:
-        draw.text((20, y), " | ".join(info_line), font=font_body, fill=0)
-        y += 35
-        
-    y += 20
-    draw.line([(10, y), (width - 10, y)], fill=0, width=2)
-    y += 10
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
-    draw.text((20, y), f"Date: {timestamp}", font=font_body, fill=0)
-    y += 30
-    
-    final_image = image.crop((0, 0, width, y + 20))
-    return final_image
-
-def show_print_dialog(voter_data):
-    """Shows the modern image print preview."""
-    st.subheader("🖨️ Print Preview (Image)")
-    
-    if not os.path.exists(FONT_PATH):
-        st.error(f"❌ '{FONT_PATH}' missing! Please upload it.")
-        return
-
-    try:
-        receipt_img = create_receipt_image(voter_data)
-        st.image(receipt_img, caption="Thermal Printer Output")
-        
-        # Download button
-        buf = io.BytesIO()
-        receipt_img.save(buf, format="PNG")
-        st.download_button("📥 Download Image", buf.getvalue(), "receipt.png", "image/png")
-    except Exception as e:
-        st.error(f"Error: {e}")
-
-# --- 3. BACKWARD COMPATIBILITY (This fixes the ImportError) ---
-# These functions intercept the old calls and redirect them to the new image printer.
 
 def format_voter_receipt(voter_data):
-    show_print_dialog(voter_data)
-    return "✅ Image generated above."
+    """
+    Format voter data for 58mm thermal printer (text mode)
+    
+    Parameters:
+    -----------
+    voter_data : dict
+        Dictionary containing voter information with keys matching column names
+    
+    Returns:
+    --------
+    str : Formatted receipt text ready for printing
+    """
+    
+    lines = []
+    
+    # Header
+    lines.append(format_divider('='))
+    lines.append(center_text("मतदाता विवरण"))
+    lines.append(center_text("VOTER DETAILS"))
+    lines.append(format_divider('='))
+    lines.append("")
+    
+    # Voter Number (prominent)
+    if 'मतदाता नं' in voter_data:
+        lines.append(center_text(f"मतदाता नं: {voter_data['मतदाता नं']}"))
+        lines.append(format_divider('-'))
+    
+    # Serial Number
+    if 'सि.नं.' in voter_data:
+        lines.append(f"सि.नं.: {voter_data['सि.नं.']}")
+    
+    # Voter Name (can be long, so split if needed)
+    if 'मतदाताको नाम' in voter_data:
+        name = normalize_text(voter_data['मतदाताको नाम'])
+        lines.append("")
+        lines.append("मतदाताको नाम:")
+        name_lines = split_text(name, width=40)
+        for nl in name_lines:
+            lines.append(f"  {nl}")
+    
+    # Age and Gender on same line
+    age_gender_line = ""
+    if 'उमेर(वर्ष)' in voter_data:
+        age_gender_line += f"उमेर: {voter_data['उमेर(वर्ष)']} वर्ष"
+    if 'लिङ्ग' in voter_data:
+        if age_gender_line:
+            age_gender_line += " | "
+        age_gender_line += f"लिङ्ग: {voter_data['लिङ्ग']}"
+    if age_gender_line:
+        lines.append("")
+        lines.append(age_gender_line)
+    
+    # Father/Mother Name
+    if 'पिता/माताको नाम' in voter_data and voter_data['पिता/माताको नाम']:
+        parent = normalize_text(voter_data['पिता/माताको नाम'])
+        lines.append("")
+        lines.append("पिता/माताको नाम:")
+        parent_lines = split_text(parent, width=40)
+        for pl in parent_lines:
+            lines.append(f"  {pl}")
+    
+    # Spouse Name
+    if 'पति/पत्नीको नाम' in voter_data and voter_data['पति/पत्नीको नाम'] and voter_data['पति/पत्नीको नाम'] != '-':
+        spouse = normalize_text(voter_data['पति/पत्नीको नाम'])
+        lines.append("")
+        lines.append("पति/पत्नीको नाम:")
+        spouse_lines = split_text(spouse, width=40)
+        for sl in spouse_lines:
+            lines.append(f"  {sl}")
+    
+    # Additional details if present
+    if 'मतदाता विवरणहरू' in voter_data and voter_data['मतदाता विवरणहरू']:
+        details = voter_data['मतदाता विवरणहरू']
+        if details != 'Print':  # Skip the button label
+            lines.append("")
+            lines.append(format_divider('-'))
+            lines.append("अतिरिक्त विवरण:")
+            detail_lines = split_text(details, width=40)
+            for dl in detail_lines:
+                lines.append(f"  {dl}")
+    
+    # Footer
+    lines.append("")
+    lines.append(format_divider('='))
+    
+    # Print timestamp
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    lines.append(center_text("मुद्रण मिति / Print Date"))
+    lines.append(center_text(timestamp))
+    
+    lines.append(format_divider('='))
+    lines.append("")
+    lines.append(center_text("*** धन्यवाद ***"))
+    lines.append(center_text("*** Thank You ***"))
+    lines.append("")
+    
+    # Join all lines
+    return '\n'.join(lines)
+
 
 def format_voter_receipt_html(voter_data):
-    show_print_dialog(voter_data)
-    return "✅ Image generated above."
+    """
+    Format voter data as CLEAN HTML for QZ Tray pixel printing on 80mm thermal printer.
+    Optimized for Nepali (Devanagari) text rendering.
+    
+    Parameters:
+    -----------
+    voter_data : dict
+        Dictionary containing voter information
+    
+    Returns:
+    --------
+    str : HTML string optimized for 80mm thermal printer (72mm content width)
+    """
+    
+    # Get timestamp
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+    
+    # Extract data with normalization
+    serial_no = voter_data.get('सि.नं.', 'N/A')
+    voter_no = voter_data.get('मतदाता नं', 'N/A')
+    voter_name = normalize_text(voter_data.get('मतदाताको नाम', 'N/A'))
+    age = voter_data.get('उमेर(वर्ष)', 'N/A')
+    gender = voter_data.get('लिङ्ग', 'N/A')
+    parent_name = normalize_text(voter_data.get('पिता/माताको नाम', 'N/A'))
+    spouse_name = voter_data.get('पति/पत्नीको नाम', '')
+    
+    # Spouse row (only if exists and not empty/dash)
+    spouse_row = ""
+    if spouse_name and spouse_name.strip() and spouse_name.strip() != '-':
+        spouse_name = normalize_text(spouse_name)
+        spouse_row = f'<div class="info-row"><span class="label">पति/पत्नी:</span> <span class="value">{spouse_name}</span></div>'
+    
+    # Build HTML with proper structure for 80mm printer
+    html = f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        @page {{
+            size: 80mm auto;
+            margin: 0;
+        }}
+        body {{
+            width: 72mm;
+            font-family: Arial, sans-serif;
+            font-size: 11pt;
+            margin: 0;
+            padding: 4mm;
+            background: white;
+            color: black;
+            line-height: 1.4;
+        }}
+        .header {{
+            text-align: center;
+            border-bottom: 2px solid #000;
+            padding-bottom: 3mm;
+            margin-bottom: 4mm;
+        }}
+        .header-title {{
+            font-size: 16pt;
+            font-weight: bold;
+            margin-bottom: 2mm;
+        }}
+        .header-subtitle {{
+            font-size: 10pt;
+            color: #333;
+        }}
+        .serial-box {{
+            background: #f0f0f0;
+            border: 2px solid #000;
+            text-align: center;
+            padding: 3mm 0;
+            margin: 3mm 0;
+            font-size: 13pt;
+            font-weight: bold;
+        }}
+        .voter-number {{
+            text-align: center;
+            font-size: 16pt;
+            font-weight: bold;
+            padding: 3mm 0;
+            border-top: 1px dashed #666;
+            border-bottom: 1px dashed #666;
+            margin: 3mm 0;
+        }}
+        .info-section {{
+            margin: 3mm 0;
+        }}
+        .info-row {{
+            margin: 2mm 0;
+            padding: 1mm 0;
+        }}
+        .label {{
+            font-weight: bold;
+            display: inline-block;
+        }}
+        .value {{
+            display: inline;
+        }}
+        .inline-info {{
+            margin: 2mm 0;
+        }}
+        .signature-section {{
+            margin-top: 8mm;
+            padding-top: 3mm;
+            border-top: 1px solid #666;
+        }}
+        .signature-line {{
+            margin-top: 10mm;
+            padding-top: 2mm;
+            border-top: 1px dashed #000;
+            text-align: right;
+            font-size: 9pt;
+        }}
+        .footer {{
+            margin-top: 4mm;
+            padding-top: 3mm;
+            border-top: 1px solid #666;
+            text-align: center;
+            font-size: 9pt;
+        }}
+        .footer-time {{
+            margin-bottom: 2mm;
+            color: #555;
+        }}
+        .footer-thanks {{
+            font-weight: bold;
+        }}
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <div class="header">
+        <div class="header-title">मतदाता विवरण</div>
+        <div class="header-subtitle">VOTER DETAILS</div>
+    </div>
+    
+    <!-- Serial Number -->
+    <div class="serial-box">सि.नं.: {serial_no}</div>
+    
+    <!-- Voter Number (Prominent) -->
+    <div class="voter-number">मतदाता नं: {voter_no}</div>
+    
+    <!-- Voter Information -->
+    <div class="info-section">
+        <div class="info-row">
+            <span class="label">नाम:</span> <span class="value">{voter_name}</span>
+        </div>
+        
+        <div class="info-row inline-info">
+            <span class="label">उमेर:</span> {age} वर्ष | 
+            <span class="label">लिङ्ग:</span> {gender}
+        </div>
+        
+        <div class="info-row">
+            <span class="label">पिता/माता:</span> <span class="value">{parent_name}</span>
+        </div>
+        
+        {spouse_row}
+    </div>
+    
+    <!-- Signature Section -->
+    <div class="signature-section">
+        <div style="font-size: 9pt; margin-bottom: 2mm;">हस्ताक्षर / Signature:</div>
+        <div class="signature-line">_________________</div>
+    </div>
+    
+    <!-- Footer -->
+    <div class="footer">
+        <div class="footer-time">{timestamp}</div>
+        <div class="footer-thanks">धन्यवाद / Thank You</div>
+    </div>
+</body>
+</html>"""
+    
+    return html
+
+
+def create_print_preview(voter_data):
+    """
+    Create a print preview in Streamlit
+    
+    Parameters:
+    -----------
+    voter_data : dict
+        Dictionary containing voter information
+    """
+    receipt_text = format_voter_receipt(voter_data)
+    
+    # Display with custom styling for better visibility
+    st.markdown(f"""
+    <div style="
+        background: #f7fafc;
+        border: 2px solid #e2e8f0;
+        border-radius: 8px;
+        padding: 20px;
+        font-family: 'Courier New', monospace;
+        font-size: 14px;
+        line-height: 1.6;
+        white-space: pre-wrap;
+        word-wrap: break-word;
+        overflow: visible;
+    ">{receipt_text}</div>
+    """, unsafe_allow_html=True)
+    
+    return receipt_text
+
+
+def generate_print_button(row_data, key_suffix):
+    """
+    Generate a print button for a specific row
+    
+    Parameters:
+    -----------
+    row_data : pandas.Series or dict
+        Row data containing voter information
+    key_suffix : str
+        Unique identifier for the button key
+    
+    Returns:
+    --------
+    bool : True if print button was clicked
+    """
+    if st.button("🖨️ Print", key=f"print_{key_suffix}"):
+        return True
+    return False
+
+
+def show_print_dialog(voter_data):
+    """
+    Show print dialog with preview
+    
+    Parameters:
+    -----------
+    voter_data : dict
+        Dictionary containing voter information
+    """
+    st.subheader("🖨️ मुद्रण पूर्वावलोकन / Print Preview")
+    
+    col1, col2 = st.columns([2, 1])
+    
+    with col1:
+        st.info("📄 58mm थर्मल प्रिन्टर ढाँचा (42 chars/line)")
+        receipt_text = create_print_preview(voter_data)
+    
+    with col2:
+        st.write("**मतदाता जानकारी:**")
+        st.write(f"नाम: {voter_data.get('मतदाताको नाम', 'N/A')}")
+        st.write(f"नं: {voter_data.get('मतदाता नं', 'N/A')}")
+        
+        if st.button("📥 Download TXT", use_container_width=True):
+            # Create downloadable text file
+            st.download_button(
+                label="💾 Download Receipt",
+                data=receipt_text,
+                file_name=f"voter_{voter_data.get('मतदाता नं', 'receipt')}.txt",
+                mime="text/plain",
+                use_container_width=True
+            )
+        
+        st.success("✅ Ready to print!")
+        st.caption("Copy text above or download to print on thermal printer")
+
 
 def format_compact_receipt(voter_data):
-    show_print_dialog(voter_data)
-    return "✅ Image generated above."
+    """
+    Create a more compact version for quick printing
+    
+    Parameters:
+    -----------
+    voter_data : dict
+        Dictionary containing voter information
+    
+    Returns:
+    --------
+    str : Compact formatted receipt text
+    """
+    lines = []
+    
+    lines.append(format_divider('='))
+    lines.append(center_text("मतदाता विवरण"))
+    lines.append(format_divider('='))
+    
+    if 'मतदाता नं' in voter_data:
+        lines.append(f"मतदाता नं: {voter_data['मतदाता नं']}")
+    
+    if 'मतदाताको नाम' in voter_data:
+        lines.append(f"नाम: {voter_data['मतदाताको नाम']}")
+    
+    info = []
+    if 'उमेर(वर्ष)' in voter_data:
+        info.append(f"उमेर: {voter_data['उमेर(वर्ष)']}")
+    if 'लिङ्ग' in voter_data:
+        info.append(f"लिङ्ग: {voter_data['लिङ्ग']}")
+    if info:
+        lines.append(" | ".join(info))
+    
+    if 'पिता/माताको नाम' in voter_data:
+        lines.append(f"पिता/माता: {voter_data['पिता/माताको नाम']}")
+    
+    lines.append(format_divider('='))
+    lines.append(center_text(datetime.now().strftime("%Y-%m-%d %H:%M")))
+    lines.append("")
+    
+    return '\n'.join(lines)
+
+
+# Test function
+if __name__ == "__main__":
+    # Sample voter data for testing
+    sample_voter = {
+        'सि.नं.': 1,
+        'मतदाता नं': 17641638,
+        'मतदाताको नाम': 'राम बहादुर श्रेष्ठ',
+        'उमेर(वर्ष)': 45,
+        'लिङ्ग': 'पुरुष',
+        'पति/पत्नीको नाम': 'सीता श्रेष्ठ',
+        'पिता/माताको नाम': 'हरि बहादुर / सरस्वती देवी',
+        'मतदाता विवरणहरू': 'Active voter'
+    }
+    
+    print("=" * 50)
+    print("THERMAL PRINTER TEST OUTPUT")
+    print("=" * 50)
+    print(format_voter_receipt(sample_voter))
+    print("\n\n")
+    print("=" * 50)
+    print("COMPACT VERSION")
+    print("=" * 50)
+    print(format_compact_receipt(sample_voter))
