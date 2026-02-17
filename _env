@@ -1,0 +1,3 @@
+# Local login - do not commit. Copy from .env.example if you need a template.
+VOTER_APP_USERNAME=Pukar32
+VOTER_APP_PASSWORD=Rak32

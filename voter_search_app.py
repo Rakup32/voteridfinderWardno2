@@ -25,10 +25,6 @@ import time
 import extra_streamlit_components as stx
 from credentials import USERNAME, PASSWORD
 from print_logic import format_voter_receipt, format_voter_receipt_html
-from qz_signing_backend import (
-    start_signing_thread, load_public_cert_pem,
-    SIGNING_SERVER_PORT
-)
 
 # ============================================================================
 # IMPORT NEPALI CONVERTER
@@ -197,13 +193,6 @@ def print_receipt_qz(printer_name, html_content):
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
-
-# ── QZ Tray silent-print: start the signing server once per process ─────────
-_qz_signing_active = start_signing_thread()
-if _qz_signing_active:
-    logger.info("QZ signing server started on port %d", SIGNING_SERVER_PORT)
-else:
-    logger.warning("QZ signing server not started (missing key — run generate_qz_certs.py)")
 
 # Set page configuration
 st.set_page_config(
@@ -509,72 +498,27 @@ def _build_direct_download_button(receipt_text, voter_num, voter_name):
 
 def create_qz_print_button_image(voter_num, html_content):
     """
-    QZ Tray SILENT-PRINT button — no allow/deny popup.
-
-    How silent printing works:
-    ─────────────────────────────────────────────────────────────────────────
-      1. qz_signing_backend.py starts a Flask server on localhost:8502.
-      2. The public certificate PEM is injected into this HTML so the JS can
-         pass it to  qz.security.setCertificatePromise().
-      3. When QZ Tray requests a signature it calls:
-             GET localhost:8502/sign?request=<timestamp>
-         The Flask server signs the timestamp with the private key and returns
-         a base64 SHA-512 signature.
-      4. Because the certificate is trusted (imported once in QZ Site Manager)
-         and the signature is valid, QZ Tray skips the popup completely.
+    Create print button using QZ Tray PIXEL mode with HTML rendering.
+    Optimized for 80mm thermal printers with Nepali (Devanagari) text.
+    
+    Parameters:
+    -----------
+    voter_num : int/str
+        Voter number for identification
+    html_content : str
+        HTML content from format_voter_receipt_html() function
     """
-    # Load the public cert PEM (injected inline into JS)
-    cert_pem = load_public_cert_pem()
-    signing_available = bool(cert_pem and _qz_signing_active)
-
-    # Escape HTML receipt for JS template literal
-    html_escaped = (
-        html_content
-        .replace('\\', '\\\\')
-        .replace('`', '\\`')
-        .replace('$', '\\$')
-    )
-
-    # Escape cert PEM for JS — replace newlines with \n literal
-    cert_js = cert_pem.replace('\\', '\\\\').replace('\n', '\\n').replace("'", "\\'")
-
-    # Build the silent-sign JS block (or empty fallback if no key)
-    if signing_available:
-        sign_block = f"""
-        // ── SILENT PRINT: inject trusted certificate ────────────────────
-        qz.security.setCertificatePromise(function(resolve, reject) {{
-            resolve(`{cert_js}`);
-        }});
-
-        // ── SILENT PRINT: fetch signature from Python backend ───────────
-        qz.security.setSignatureAlgorithm("SHA512");   // must match backend
-        qz.security.setSignaturePromise(function(toSign) {{
-            return function(resolve, reject) {{
-                const url = `http://localhost:{SIGNING_SERVER_PORT}/sign?request=${{encodeURIComponent(toSign)}}`;
-                fetch(url)
-                    .then(function(resp) {{
-                        if (!resp.ok) throw new Error("Signing server error: " + resp.status);
-                        return resp.text();
-                    }})
-                    .then(function(signature) {{
-                        resolve(signature);
-                    }})
-                    .catch(function(err) {{
-                        console.error("❌ Signature fetch failed:", err);
-                        reject(err);
-                    }});
-            }};
-        }});
-        // ── END SILENT PRINT SETUP ───────────────────────────────────────
-"""
-    else:
-        sign_block = """
-        // ⚠️ Silent print not configured — QZ Tray will show allow/deny popup.
-        // Run generate_qz_certs.py and set QZ_PRIVATE_KEY_PATH to enable silent printing.
-"""
-
+    import json
+    
+    # Escape HTML content for JavaScript (simple and safe)
+    html_escaped = (html_content
+                   .replace('\\', '\\\\')
+                   .replace('`', '\\`')
+                   .replace('$', '\\$'))
+    
     html = f"""
     <div style="width: 100%; padding: 8px;">
+        <!-- Print Button -->
         <button id="printBtn_{voter_num}" onclick="printReceipt_{voter_num}()" style="
             width: 100%;
             padding: 14px 16px;
@@ -591,109 +535,135 @@ def create_qz_print_button_image(voter_num, html_content):
         " onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 20px rgba(102,126,234,.5)'"
            onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='0 4px 15px rgba(102,126,234,.3)'">
             🖨️ Print Slip<br>
-            <span style="font-size: 12px; opacity: 0.9; font-weight: 500;">
-                {"(Silent Print ✅)" if signing_available else "(Thermal Printer)"}
-            </span>
+            <span style="font-size: 12px; opacity: 0.9; font-weight: 500;">(Thermal Printer)</span>
         </button>
-
+        
+        <!-- Status Display -->
         <div id="status_{voter_num}" style="
-            padding: 10px; border-radius: 6px; font-size: 12px;
-            line-height: 1.4; display: none; margin-top: 8px;
+            padding: 10px;
+            border-radius: 6px;
+            font-size: 12px;
+            line-height: 1.4;
+            display: none;
+            margin-top: 8px;
         "></div>
     </div>
-
-    <script src="https://cdn.jsdelivr.net/npm/qz-tray@2.2.3/qz-tray.min.js"></script>
-
+    
+    <!-- QZ Tray Library -->
+    <script src="https://cdn.jsdelivr.net/npm/qz-tray@2.2/qz-tray.min.js"></script>
+    
     <script>
     (function() {{
+        // HTML content for printing
         const htmlContent = `{html_escaped}`;
-        const statusDiv   = document.getElementById('status_{voter_num}');
-        const printBtn    = document.getElementById('printBtn_{voter_num}');
-
-        function updateStatus(message, type) {{
+        
+        const statusDiv = document.getElementById('status_{voter_num}');
+        const printBtn = document.getElementById('printBtn_{voter_num}');
+        
+        function updateStatus(message, type = 'info') {{
             const colors = {{
-                info:    '#3182ce',
-                success: '#38a169',
-                error:   '#e53e3e',
-                warning: '#d69e2e'
+                'info': '#3182ce',
+                'success': '#38a169',
+                'error': '#e53e3e',
+                'warning': '#d69e2e'
             }};
-            statusDiv.style.display    = 'block';
+            statusDiv.style.display = 'block';
             statusDiv.style.background = colors[type] + '22';
-            statusDiv.style.border     = '2px solid ' + colors[type];
-            statusDiv.style.color      = colors[type];
-            statusDiv.innerHTML        = message;
+            statusDiv.style.border = '2px solid ' + colors[type];
+            statusDiv.style.color = colors[type];
+            statusDiv.innerHTML = message;
         }}
-
-        {sign_block}
-
+        
         window.printReceipt_{voter_num} = async function() {{
             try {{
-                printBtn.disabled      = true;
+                // Disable button
+                printBtn.disabled = true;
                 printBtn.style.opacity = '0.6';
-                printBtn.style.cursor  = 'not-allowed';
-
-                // Step 1 – Connect
-                updateStatus('🔌 जडान गर्दै... / Connecting...', 'info');
+                printBtn.style.cursor = 'not-allowed';
+                
+                // Step 1: Connect to QZ Tray
+                updateStatus('🔌 Connecting to QZ Tray...', 'info');
+                
                 if (!qz.websocket.isActive()) {{
                     await qz.websocket.connect();
                 }}
-                updateStatus('✅ जडान भयो / Connected', 'success');
-
-                // Step 2 – Find printer
-                updateStatus('🔍 प्रिन्टर खोज्दै... / Finding printer...', 'info');
+                
+                updateStatus('✅ Connected to QZ Tray', 'success');
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+                // Step 2: Find printer
+                updateStatus('🔍 Finding printer...', 'info');
+                
                 const printers = await qz.printers.find();
-                let targetPrinter = printers.find(p =>
+                console.log('Available printers:', printers);
+                
+                // Look for 'zkteco' printer first
+                let targetPrinter = printers.find(p => 
                     p.toLowerCase().includes('zkteco')
                 );
+                
+                // If not found, use the first available printer
                 if (!targetPrinter) {{
                     targetPrinter = printers[0];
                     updateStatus(`⚠️ Using: ${{targetPrinter}}`, 'warning');
-                    await new Promise(r => setTimeout(r, 800));
+                    await new Promise(resolve => setTimeout(resolve, 1000));
                 }} else {{
                     updateStatus(`✅ Found: ${{targetPrinter}}`, 'success');
-                    await new Promise(r => setTimeout(r, 400));
+                    await new Promise(resolve => setTimeout(resolve, 500));
                 }}
-
-                // Step 3 – Configure and print (pixel/HTML mode for Nepali text)
+                
+                // Step 3: Configure printer
                 const config = qz.configs.create(targetPrinter);
+                
+                // Step 4: Prepare print data using PIXEL mode with HTML
                 const printData = [{{
-                    type:   'pixel',
+                    type: 'pixel',
                     format: 'html',
                     flavor: 'plain',
-                    data:   htmlContent
+                    data: htmlContent
                 }}];
-
-                updateStatus('🖨️ प्रिन्ट गर्दै... / Printing...', 'info');
+                
+                // Step 5: Send to printer
+                updateStatus('🖨️ Printing...', 'info');
+                
                 await qz.print(config, printData);
-
-                updateStatus('✅ मुद्रण सफल! / Print successful!', 'success');
-
+                
+                // Success
+                updateStatus('✅ Print successful! / मुद्रण सफल!', 'success');
+                
+                // Reset after 3 seconds
                 setTimeout(() => {{
-                    printBtn.disabled      = false;
+                    printBtn.disabled = false;
                     printBtn.style.opacity = '1';
-                    printBtn.style.cursor  = 'pointer';
+                    printBtn.style.cursor = 'pointer';
                     statusDiv.style.display = 'none';
                 }}, 3000);
-
+                
             }} catch (err) {{
                 console.error('Print Error:', err);
-                let message = '❌ त्रुटि: ';
+                
+                // User-friendly error messages
+                let message = '❌ Error: ';
                 if (err.message && err.message.includes('establish')) {{
-                    message += 'QZ Tray बन्द छ — Start QZ Tray!';
+                    message += 'QZ Tray is not running! Please start QZ Tray application.';
                 }} else if (err.message && err.message.includes('find')) {{
-                    message += 'प्रिन्टर भेटिएन — Turn ON printer.';
+                    message += 'Printer not found! Please check if printer is ON and connected.';
                 }} else {{
-                    message += (err.message || 'Unknown error');
+                    message += err.message || 'Unknown error occurred';
                 }}
-                updateStatus(message + '<br><small>F12 → Console for details</small>', 'error');
-                printBtn.disabled      = false;
+                
+                updateStatus(message + '<br><small>Check console (F12) for details</small>', 'error');
+                
+                // Re-enable button
+                printBtn.disabled = false;
                 printBtn.style.opacity = '1';
-                printBtn.style.cursor  = 'pointer';
+                printBtn.style.cursor = 'pointer';
             }}
         }};
     }})();
     </script>
     """
+    
     return html
 
 
