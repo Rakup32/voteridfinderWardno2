@@ -16,6 +16,7 @@ PRINTER_WIDTH = 576
 FONT_PATH = "Kalimati.otf"
 
 # --- 1. SAFE LABELS (Unicode Encoded) ---
+# Prevents "Box" issues even if file encoding is wrong
 L_HEADER = "\u092e\u0924\u0926\u093e\u0924\u093e \u0935\u093f\u0935\u0930\u0923"
 L_SERIAL = "\u0938\u093f.\u0928\u0902."
 L_VOTER_NO = "\u092e\u0924\u0926\u093e\u0924\u093e \u0928\u0902"
@@ -25,7 +26,7 @@ L_SPOUSE = "\u092a\u0924\u093f/\u092a\u0924\u094d\u0928\u0940"
 L_AGE = "\u0909\u092e\u0947\u0930"
 L_GENDER = "\u0932\u093f\u0919\u094d\u0917"
 
-# --- 2. IMAGE GENERATION LOGIC (The Real Fix) ---
+# --- 2. IMAGE GENERATION LOGIC (The Fix) ---
 def normalize_text(text):
     if not isinstance(text, str):
         text = str(text)
@@ -144,7 +145,7 @@ def create_receipt_image(voter_data):
 
 def show_print_dialog(voter_data):
     """Shows the modern image print preview."""
-    st.subheader("🖨️ Image Print Preview")
+    st.subheader("🖨️ Print Preview (Image)")
     
     if not os.path.exists(FONT_PATH):
         st.error(f"❌ '{FONT_PATH}' missing! Please upload it.")
@@ -152,7 +153,7 @@ def show_print_dialog(voter_data):
 
     try:
         receipt_img = create_receipt_image(voter_data)
-        st.image(receipt_img, caption="Right-click > Open in new tab > Print (Ctrl+P)")
+        st.image(receipt_img, caption="Thermal Printer Output")
         
         # Download button
         buf = io.BytesIO()
@@ -161,31 +162,17 @@ def show_print_dialog(voter_data):
     except Exception as e:
         st.error(f"Error: {e}")
 
-# --- 3. BACKWARD COMPATIBILITY (Prevents ImportError) ---
+# --- 3. BACKWARD COMPATIBILITY (This fixes the ImportError) ---
 # These functions intercept the old calls and redirect them to the new image printer.
 
 def format_voter_receipt(voter_data):
-    """
-    HIJACKED: This function used to return text. 
-    Now it renders the image dialog and returns a safe message.
-    """
-    show_print_dialog(voter_data)
-    return "✅ Image generated above. Please print that."
-
-def format_voter_receipt_html(voter_data):
-    """
-    HIJACKED: Same as above.
-    """
-    show_print_dialog(voter_data)
-    return "✅ Image generated above. Please print that."
-
-def format_compact_receipt(voter_data):
-    """
-    HIJACKED: Same as above.
-    """
     show_print_dialog(voter_data)
     return "✅ Image generated above."
 
-def create_print_preview(voter_data):
+def format_voter_receipt_html(voter_data):
     show_print_dialog(voter_data)
-    return "Preview generated."
+    return "✅ Image generated above."
+
+def format_compact_receipt(voter_data):
+    show_print_dialog(voter_data)
+    return "✅ Image generated above."
