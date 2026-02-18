@@ -195,22 +195,22 @@ def format_voter_receipt_html(voter_data):
             font-family: 'Kalimati', Arial, sans-serif;
             font-size: 11pt;
             margin: 0;
-            padding: 4mm;
+            padding: 2mm 3mm;
             background: white;
             color: black;
-            line-height: 1.5;
+            line-height: 1.3;
         }}
         .header {{
             text-align: center;
             border-bottom: 2px solid #000;
-            padding-bottom: 3mm;
-            margin-bottom: 4mm;
+            padding-bottom: 2mm;
+            margin-bottom: 2mm;
         }}
         .header-title {{
             font-family: 'Kalimati', Arial, sans-serif;
-            font-size: 16pt;
+            font-size: 15pt;
             font-weight: bold;
-            margin-bottom: 2mm;
+            margin-bottom: 1mm;
         }}
         .header-subtitle {{
             font-family: Arial, sans-serif;
@@ -218,31 +218,33 @@ def format_voter_receipt_html(voter_data):
             color: #333;
         }}
         .serial-box {{
-            background: #f0f0f0;
-            border: 2px solid #000;
+            background: #000;
+            color: #fff;
+            border: 3px solid #000;
             text-align: center;
             padding: 3mm 0;
-            margin: 3mm 0;
-            font-size: 13pt;
+            margin: 2mm 0;
+            font-size: 14pt;
             font-weight: bold;
             font-family: 'Kalimati', Arial, sans-serif;
+            letter-spacing: 1px;
         }}
         .voter-number {{
             text-align: center;
-            font-size: 16pt;
-            font-weight: bold;
-            padding: 3mm 0;
+            font-size: 13pt;
+            font-weight: normal;
+            padding: 2mm 0;
             border-top: 1px dashed #666;
             border-bottom: 1px dashed #666;
-            margin: 3mm 0;
+            margin: 2mm 0;
             font-family: 'Kalimati', Arial, sans-serif;
         }}
         .info-section {{
-            margin: 3mm 0;
+            margin: 2mm 0;
         }}
         .info-row {{
-            margin: 2mm 0;
-            padding: 1mm 0;
+            margin: 1mm 0;
+            padding: 0.5mm 0;
             font-family: 'Kalimati', Arial, sans-serif;
         }}
         /* FIX: .label was showing boxes because it inherited Arial.
@@ -260,28 +262,15 @@ def format_voter_receipt_html(voter_data):
             margin: 2mm 0;
             font-family: 'Kalimati', Arial, sans-serif;
         }}
-        .signature-section {{
-            margin-top: 8mm;
-            padding-top: 3mm;
-            border-top: 1px solid #666;
-        }}
-        .signature-line {{
-            margin-top: 10mm;
-            padding-top: 2mm;
-            border-top: 1px dashed #000;
-            text-align: right;
-            font-size: 9pt;
-            font-family: 'Kalimati', Arial, sans-serif;
-        }}
         .footer {{
-            margin-top: 4mm;
-            padding-top: 3mm;
+            margin-top: 2mm;
+            padding-top: 2mm;
             border-top: 1px solid #666;
             text-align: center;
             font-size: 9pt;
         }}
         .footer-time {{
-            margin-bottom: 2mm;
+            margin-bottom: 1mm;
             color: #555;
             font-family: Arial, sans-serif;
         }}
@@ -325,12 +314,6 @@ def format_voter_receipt_html(voter_data):
         </div>
         
         {spouse_row}
-    </div>
-    
-    <!-- Signature Section -->
-    <div class="signature-section">
-        <div style="font-size: 9pt; margin-bottom: 2mm; font-family: 'Kalimati', Arial, sans-serif;">हस्ताक्षर / Signature:</div>
-        <div class="signature-line">_________________</div>
     </div>
     
     <!-- Footer -->
