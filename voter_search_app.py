@@ -84,6 +84,23 @@ def print_receipt_qz(printer_name, html_content):
             const PRINTER_NAME = "{printer_name}";
             const HTML_CONTENT = `{escaped_html}`;
             
+            // QZ Tray Security Configuration
+            const QZ_CERT = `{QZ_PUBLIC_KEY}`;
+            const QZ_SIG = `{QZ_SIGNATURE}`;
+            
+            // Set up QZ Tray security
+            qz.security.setCertificatePromise(function(resolve, reject) {{
+                console.log('🔐 Setting certificate...');
+                resolve(QZ_CERT);
+            }});
+            
+            qz.security.setSignaturePromise(function(toSign) {{
+                return function(resolve, reject) {{
+                    console.log('✍️ Setting signature...');
+                    resolve(QZ_SIG);
+                }};
+            }});
+            
             // Connect to QZ Tray
             function connectQZ() {{
                 return new Promise((resolve, reject) => {{
