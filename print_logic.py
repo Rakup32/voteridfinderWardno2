@@ -224,7 +224,7 @@ def format_voter_receipt_html(voter_data):
             text-align: center;
             padding: 3mm 0;
             margin: 2mm 0;
-            font-size: 14pt;
+            font-size: 16pt;
             font-weight: bold;
             font-family: 'Kalimati', Arial, sans-serif;
             letter-spacing: 1px;
