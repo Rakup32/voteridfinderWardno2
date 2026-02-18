@@ -27,23 +27,6 @@ from credentials import USERNAME, PASSWORD
 from print_logic import format_voter_receipt, format_voter_receipt_html
 
 # ============================================================================
-# QZ TRAY DIGITAL SIGNATURE - NO MORE WARNINGS!
-# ============================================================================
-
-QZ_PUBLIC_KEY = """-----BEGIN PUBLIC KEY-----
-MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAjsE3ZYXM+kRck4nqOxJU
-OwUm0hZl7+3hQpdIx5csFgVoZrXhb1iwLmw+xAgZ7Hi4yygAes1or9aUrlEnRCRv
-ICLRxr7OXWkv0XqWSoZ9ZRcIt8rX2byMdP5RoYgSfdDPhJPdOdZvGeNzLD84nsEb
-QZvTCS6hK7zIM116DlnbcjMwMUIsEE2OUgvfE4ajtMWEYEzKvAaiqndBXAnRstLa
-rLuk9zMFAzDHyM5QWGxYi6MO+NmXtr2TwQLRcqn2XKmPYXVkxBlER651Znh8XeLY
-6jiduwXea8J+M0yKMf2kyy+LhlunXK1JubggIC8QXXEA4X+VuCl60IZDEVlWKLgl
-BQIDAQAB
------END PUBLIC KEY-----"""
-
-QZ_SIGNATURE = "U4CM6NObLgZEvgOg1fQQPdciZOBFWkAjTiWSBnoCNz5hc1P4H167SjuyzeECHW+OdPtUz4YY3s+kDeoqdmrqZRtj80CPuzpmiJwHlfv5WRREMhKugc5TYwaPjz37dzmrJyor6tefr9eNYRodUFAu+W8O0K2dca7bePaLtJOGEXKxpyqRHbZk/J8MqvwMJo7e/Bo/V3PgafhwN4m4tPzQbFd7O/tpGshzqdUX+7A5fqLxcQjPHQBU7WuWJGGEZFnwc+87RlVp85GhzQADx7shNq74iEz5deHwlGd0hVhY16Zu1POsJvjUzT+PDFwposEhCjC6K7wsMyGapOQty673nw=="
-
-# ============================================================================
-# ============================================================================
 # IMPORT NEPALI CONVERTER
 # ============================================================================
 
@@ -83,23 +66,6 @@ def print_receipt_qz(printer_name, html_content):
             // Configuration
             const PRINTER_NAME = "{printer_name}";
             const HTML_CONTENT = `{escaped_html}`;
-            
-            // QZ Tray Security Configuration
-            const QZ_CERT = `{QZ_PUBLIC_KEY}`;
-            const QZ_SIG = `{QZ_SIGNATURE}`;
-            
-            // Set up QZ Tray security
-            qz.security.setCertificatePromise(function(resolve, reject) {{
-                console.log('🔐 Setting certificate...');
-                resolve(QZ_CERT);
-            }});
-            
-            qz.security.setSignaturePromise(function(toSign) {{
-                return function(resolve, reject) {{
-                    console.log('✍️ Setting signature...');
-                    resolve(QZ_SIG);
-                }};
-            }});
             
             // Connect to QZ Tray
             function connectQZ() {{
@@ -548,69 +514,71 @@ def _build_direct_download_button(receipt_text, voter_num, voter_name):
 </div>
 """
 
-def create_qz_print_button_image(voter_num, html_receipt):
+def create_qz_print_button_image(voter_num, html_content):
     """
-    Create QZ Tray print button with digital signature
-    ELIMINATES "Untrusted website" warnings!
+    Create print button using QZ Tray PIXEL mode with HTML rendering.
+    Optimized for 80mm thermal printers with Nepali (Devanagari) text.
+    
+    Parameters:
+    -----------
+    voter_num : int/str
+        Voter number for identification
+    html_content : str
+        HTML content from format_voter_receipt_html() function
     """
-    import base64
+    import json
     
-    # Encode the HTML receipt
-    receipt_base64 = base64.b64encode(html_receipt.encode('utf-8')).decode('utf-8')
+    # Escape HTML content for JavaScript (simple and safe)
+    html_escaped = (html_content
+                   .replace('\\', '\\\\')
+                   .replace('`', '\\`')
+                   .replace('$', '\\$'))
     
-    # Create the print button with signature
-    button_html = f"""
-    <div style="padding: 10px;">
+    html = f"""
+    <div style="width: 100%; padding: 8px;">
+        <!-- Print Button -->
         <button id="printBtn_{voter_num}" onclick="printReceipt_{voter_num}()" style="
             width: 100%;
-            padding: 12px;
+            padding: 14px 16px;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
             border: none;
             border-radius: 8px;
-            font-size: 14px;
-            font-weight: bold;
+            font-size: 15px;
+            font-weight: 600;
             cursor: pointer;
             transition: all 0.3s ease;
             box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+            margin-bottom: 10px;
         " onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 20px rgba(102,126,234,.5)'"
            onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='0 4px 15px rgba(102,126,234,.3)'">
-            🖨️ Print Receipt<br>
-            <span style="font-size: 11px; opacity: 0.9;">✅ Secure Connection</span>
+            🖨️ Print Slip<br>
+            <span style="font-size: 12px; opacity: 0.9; font-weight: 500;">(Thermal Printer)</span>
         </button>
         
+        <!-- Status Display -->
         <div id="status_{voter_num}" style="
-            padding: 8px;
+            padding: 10px;
             border-radius: 6px;
-            font-size: 11px;
+            font-size: 12px;
+            line-height: 1.4;
             display: none;
             margin-top: 8px;
         "></div>
     </div>
     
-    <script src="https://cdn.jsdelivr.net/npm/qz-tray@2.2.3/qz-tray.min.js"></script>
+    <!-- QZ Tray Library -->
+    <script src="https://cdn.jsdelivr.net/npm/qz-tray@2.2/qz-tray.min.js"></script>
     
     <script>
     (function() {{
-        // QZ Tray Configuration with Digital Signature (No Warnings!)
-        const QZ_CERT = `{QZ_PUBLIC_KEY}`;
-        const QZ_SIG = "{QZ_SIGNATURE}";
-        const receiptBase64 = "{receipt_base64}";
+        // HTML content for printing
+        const htmlContent = `{html_escaped}`;
+        
         const statusDiv = document.getElementById('status_{voter_num}');
         const printBtn = document.getElementById('printBtn_{voter_num}');
         
-        // Configure QZ Tray security - THIS ELIMINATES THE WARNING!
-        qz.security.setCertificatePromise(function(resolve, reject) {{
-            resolve(QZ_CERT);
-        }});
-        
-        qz.security.setSignaturePromise(function(toSign) {{
-            return function(resolve, reject) {{
-                resolve(QZ_SIG);
-            }};
-        }});
-        
-        function updateStatus(msg, type) {{
+        function updateStatus(message, type = 'info') {{
             const colors = {{
                 'info': '#3182ce',
                 'success': '#38a169',
@@ -621,102 +589,101 @@ def create_qz_print_button_image(voter_num, html_receipt):
             statusDiv.style.background = colors[type] + '22';
             statusDiv.style.border = '2px solid ' + colors[type];
             statusDiv.style.color = colors[type];
-            statusDiv.innerHTML = msg;
+            statusDiv.innerHTML = message;
         }}
         
         window.printReceipt_{voter_num} = async function() {{
             try {{
+                // Disable button
                 printBtn.disabled = true;
                 printBtn.style.opacity = '0.6';
+                printBtn.style.cursor = 'not-allowed';
                 
-                updateStatus('🔌 जडान गर्दै...', 'info');
+                // Step 1: Connect to QZ Tray
+                updateStatus('🔌 Connecting to QZ Tray...', 'info');
                 
-                // Connect to QZ Tray (NOW TRUSTED - NO WARNING!)
                 if (!qz.websocket.isActive()) {{
                     await qz.websocket.connect();
                 }}
                 
-                updateStatus('✅ सुरक्षित जडान भयो', 'success');
+                updateStatus('✅ Connected to QZ Tray', 'success');
+                await new Promise(resolve => setTimeout(resolve, 500));
                 
-                // Find printer
+                // Step 2: Find printer
+                updateStatus('🔍 Finding printer...', 'info');
+                
                 const printers = await qz.printers.find();
-                let printer = printers.find(p => p.toLowerCase().includes('zkteco')) || printers[0];
+                console.log('Available printers:', printers);
                 
-                if (!printer) {{
-                    throw new Error('No printer found');
+                // Look for 'zkteco' printer first
+                let targetPrinter = printers.find(p => 
+                    p.toLowerCase().includes('zkteco')
+                );
+                
+                // If not found, use the first available printer
+                if (!targetPrinter) {{
+                    targetPrinter = printers[0];
+                    updateStatus(`⚠️ Using: ${{targetPrinter}}`, 'warning');
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                }} else {{
+                    updateStatus(`✅ Found: ${{targetPrinter}}`, 'success');
+                    await new Promise(resolve => setTimeout(resolve, 500));
                 }}
                 
-                updateStatus('🖨️ तयारी गर्दै...', 'info');
+                // Step 3: Configure printer
+                const config = qz.configs.create(targetPrinter);
                 
-                // Decode receipt
-                const receiptText = decodeURIComponent(escape(atob(receiptBase64)));
+                // Step 4: Prepare print data using PIXEL mode with HTML
+                const printData = [{{
+                    type: 'pixel',
+                    format: 'html',
+                    flavor: 'plain',
+                    data: htmlContent
+                }}];
                 
-                // Configure print job
-                const config = qz.configs.create(printer, {{
-                    encoding: 'UTF-8',
-                    colorType: 'blackwhite'
-                }});
+                // Step 5: Send to printer
+                updateStatus('🖨️ Printing...', 'info');
                 
-                // ESC/POS commands for thermal printer
-                const initCmd = '\\x1B\\x40';      // Initialize printer
-                const utf8Cmd = '\\x1B\\x74\\x10';  // UTF-8 charset
-                const cutCmd = '\\x1D\\x56\\x00';   // Full cut
-                
-                const printData = [
-                    {{
-                        type: 'raw',
-                        format: 'command',
-                        data: initCmd
-                    }},
-                    {{
-                        type: 'raw',
-                        format: 'command',
-                        data: utf8Cmd
-                    }},
-                    {{
-                        type: 'raw',
-                        format: 'plain',
-                        data: receiptText,
-                        options: {{ encoding: 'UTF-8' }}
-                    }},
-                    {{
-                        type: 'raw',
-                        format: 'command',
-                        data: cutCmd
-                    }}
-                ];
-                
-                updateStatus('🖨️ प्रिन्ट गर्दै...', 'info');
                 await qz.print(config, printData);
                 
-                updateStatus('✅ सफल!', 'success');
+                // Success
+                updateStatus('✅ Print successful! / मुद्रण सफल!', 'success');
                 
+                // Reset after 3 seconds
                 setTimeout(() => {{
                     printBtn.disabled = false;
                     printBtn.style.opacity = '1';
+                    printBtn.style.cursor = 'pointer';
                     statusDiv.style.display = 'none';
                 }}, 3000);
                 
             }} catch (err) {{
-                console.error('Print error:', err);
-                let msg = '❌ त्रुटि: ';
-                if (err.message.includes('establish')) {{
-                    msg += 'QZ Tray खोल्नुहोस्';
-                }} else if (err.message.includes('find') || err.message.includes('No printer')) {{
-                    msg += 'प्रिन्टर फेला परेन';
+                console.error('Print Error:', err);
+                
+                // User-friendly error messages
+                let message = '❌ Error: ';
+                if (err.message && err.message.includes('establish')) {{
+                    message += 'QZ Tray is not running! Please start QZ Tray application.';
+                }} else if (err.message && err.message.includes('find')) {{
+                    message += 'Printer not found! Please check if printer is ON and connected.';
                 }} else {{
-                    msg += err.message;
+                    message += err.message || 'Unknown error occurred';
                 }}
-                updateStatus(msg, 'error');
+                
+                updateStatus(message + '<br><small>Check console (F12) for details</small>', 'error');
+                
+                // Re-enable button
                 printBtn.disabled = false;
                 printBtn.style.opacity = '1';
+                printBtn.style.cursor = 'pointer';
             }}
         }};
     }})();
     </script>
     """
     
-    return button_html
+    return html
+
 
 def create_qz_print_button_text(voter_num, voter_name, age, gender, parent, spouse):
     """
