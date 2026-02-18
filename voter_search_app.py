@@ -299,11 +299,27 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- LOGIN LOGIC WITH COOKIES ---
+# --- LOGIN LOGIC WITH COOKIES AND SESSION TIMEOUT ---
 time.sleep(0.1) 
 cookies = cookie_manager.get_all()
+
+# Session timeout: 60 minutes
+SESSION_TIMEOUT = 60 * 60  # 60 minutes in seconds
+
 if 'voter_auth' in cookies and cookies['voter_auth'] == 'true':
-    st.session_state.logged_in = True
+    # Check if session has timed out
+    if 'login_time' not in st.session_state:
+        st.session_state.login_time = time.time()
+        st.session_state.logged_in = True
+    else:
+        elapsed_time = time.time() - st.session_state.login_time
+        if elapsed_time > SESSION_TIMEOUT:
+            # Session expired
+            st.session_state.logged_in = False
+            st.session_state.pop('login_time', None)
+            cookie_manager.delete('voter_auth')
+        else:
+            st.session_state.logged_in = True
 elif 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
 
@@ -344,6 +360,7 @@ def login_page():
                 st.error("⚠️ Setup credentials in .env file or Streamlit secrets")
             elif check_login(username, password):
                 st.session_state.logged_in = True
+                st.session_state.login_time = time.time()  # Set login time
                 cookie_manager.set('voter_auth', 'true', expires_at=None, key="set_auth")
                 st.success("✅ लगइन सफल भयो! (Login Success)")
                 st.balloons()
@@ -356,6 +373,7 @@ def login_page():
 
 def logout():
     st.session_state.logged_in = False
+    st.session_state.pop('login_time', None)  # Clear login time
     cookie_manager.delete('voter_auth', key="del_auth")
     time.sleep(0.5)
     st.rerun()
@@ -1053,14 +1071,40 @@ def show_results_table_with_print(data, columns):
     if data.empty:
         return
 
-    st.markdown("""
-    <div class="print-info-box">
-        <strong>🖨️ थर्मल प्रिन्टर मोड / Thermal Printer Mode</strong><br>
-        📋 प्रत्येक मतदाताको TXT फाइल डाउनलोड गर्नुहोस्।<br>
-        💡 TXT फाइल सिधै थर्मल प्रिन्टरमा प्रिन्ट गर्न सकिन्छ।
-    </div>
-    """, unsafe_allow_html=True)
-
+    # Use container with anchor for scrolling
+    st.markdown('<div id="results-anchor" style="scroll-margin-top: 20px;"></div>', unsafe_allow_html=True)
+    
+    # Inject JavaScript to scroll to results
+    st.components.v1.html("""
+    <script>
+    (function() {
+        // Multiple attempts to ensure scroll works
+        function scrollToResults() {
+            // Method 1: Scroll to bottom
+            window.parent.scrollTo({
+                top: window.parent.document.body.scrollHeight,
+                behavior: 'smooth'
+            });
+            
+            // Method 2: Find and scroll to element
+            setTimeout(function() {
+                const anchor = window.parent.document.getElementById('results-anchor');
+                if (anchor) {
+                    anchor.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            }, 100);
+        }
+        
+        // Try immediately
+        scrollToResults();
+        
+        // Try again after a delay
+        setTimeout(scrollToResults, 300);
+        setTimeout(scrollToResults, 600);
+    })();
+    </script>
+    """, height=0)
+    
     st.caption(f"📊 कुल मतदाता: {len(data):,}")
 
     for idx, row in data.iterrows():
@@ -1104,8 +1148,23 @@ def show_results_table(data, columns):
     st.dataframe(data[columns], use_container_width=True, height=display_height, hide_index=True)
 
 def main_app():
+    # Check session timeout
+    if 'login_time' in st.session_state:
+        elapsed_time = time.time() - st.session_state.login_time
+        remaining_time = SESSION_TIMEOUT - elapsed_time
+        
+        if remaining_time <= 0:
+            # Session expired
+            st.warning("⏰ सत्र समाप्त भयो! कृपया पुन: लगइन गर्नुहोस् / Session expired! Please login again")
+            logout()
+            return
+        
+        # Show remaining time in sidebar
+        minutes_left = int(remaining_time / 60)
+        if minutes_left < 10:
+            st.sidebar.warning(f"⏰ {minutes_left} min left")
+    
     st.title("🗳️ मतदाता सूची खोज प्रणाली")
-    st.markdown("**Voter List Search System** • 🔄 **Roman/English Support Enabled**")
     
     with st.sidebar:
         if st.button("🚪 Logout / बाहिर निस्कनुहोस्", use_container_width=True):
@@ -1123,38 +1182,36 @@ def main_app():
             st.error("❌ Excel columns missing.")
             return
 
-        st.sidebar.header("🔍 खोज विकल्प")
+        # Statistics section at the top
+        st.sidebar.markdown("---")
+        st.sidebar.subheader("📊 तथ्याङ्क / Statistics")
+        st.sidebar.metric("कुल मतदाता / Total", f"{len(df):,}")
         
-        # Show conversion system status
-        conv_status = check_installation()
-        if conv_status['indic_transliteration']:
-            st.sidebar.success("✅ Roman/English Support Active")
-        else:
-            st.sidebar.warning("⚠️ Limited Roman support\nInstall: pip install indic-transliteration")
+        if 'उमेर(वर्ष)' in df.columns:
+            genz_voters = df[(df['उमेर(वर्ष)'] >= 18) & (df['उमेर(वर्ष)'] <= 29)]
+            st.sidebar.metric("👥 युवा (18-29)", f"{len(genz_voters):,}")
         
-        st.sidebar.info("""
-**💡 Type in English or Nepali!**
-
-Examples:
-- `ram` → finds राम
-- `shyam` → finds श्याम  
-- `nepal` → finds नेपाल
-- `राम` → finds राम
-        """)
+        if 'लिङ्ग' in df.columns:
+            st.sidebar.write("**लिङ्ग अनुसार:**")
+            gender_counts = df['लिङ्ग'].value_counts()
+            for gender, count in gender_counts.items():
+                percentage = (count / len(df) * 100)
+                st.sidebar.write(f"• {gender}: {count:,} ({percentage:.1f}%)")
+        
+        if 'उमेर(वर्ष)' in df.columns:
+            avg_age = df['उमेर(वर्ष)'].dropna().mean()
+            st.sidebar.metric("औसत उमेर / Avg Age", f"{avg_age:.1f} वर्ष" if not pd.isna(avg_age) else "—")
         
         st.sidebar.markdown("---")
         st.sidebar.subheader("📊 प्रदर्शन मोड / Display Mode")
         
         display_mode = st.sidebar.radio(
             "मोड छान्नुहोस् / Select Mode:",
-            ["📋 Table View (तालिका)", "🖨️ Print View (थर्मल प्रिन्टर)"],
+            ["🖨️ Print View (थर्मल प्रिन्टर)", "📋 Table View (तालिका)"],
             index=0,
-            help="Table View: सबै मतदाता एकै पटक हेर्नुहोस् | Print View: थर्मल प्रिन्टरको लागि TXT डाउनलोड गर्नुहोस्"
+            help="Print View: थर्मल प्रिन्टरको लागि TXT डाउनलोड गर्नुहोस् | Table View: सबै मतदाता एकै पटक हेर्नुहोस्"
         )
         use_print_view = (display_mode == "🖨️ Print View (थर्मल प्रिन्टर)")
-        
-        if use_print_view:
-            st.sidebar.success("✅ **Thermal Printer Mode**\n\nप्रत्येक मतदाताको TXT डाउनलोड बटन देखिनेछ।")
         
         st.sidebar.markdown("---")
         
@@ -1185,7 +1242,11 @@ Examples:
                     placeholder="राम or ram"
                 )
                 if name_filter:
-                    show_conversion_indicator(name_filter, smart_convert_to_nepali(name_filter))
+                    converted = smart_convert_to_nepali(name_filter)
+                    if use_print_view and converted != name_filter:
+                        st.info(f"🔍 {converted}")
+                    elif not use_print_view:
+                        show_conversion_indicator(name_filter, converted)
                 
                 parent_filter = st.text_input(
                     "पिता/माताको नाम / Parent Name:", 
@@ -1193,7 +1254,11 @@ Examples:
                     placeholder="हरि or hari"
                 )
                 if parent_filter:
-                    show_conversion_indicator(parent_filter, smart_convert_to_nepali(parent_filter))
+                    converted = smart_convert_to_nepali(parent_filter)
+                    if use_print_view and converted != parent_filter:
+                        st.info(f"🔍 {converted}")
+                    elif not use_print_view:
+                        show_conversion_indicator(parent_filter, converted)
                 
                 spouse_filter = st.text_input(
                     "पति/पत्नीको नाम / Spouse Name:", 
@@ -1201,16 +1266,33 @@ Examples:
                     placeholder="सीता or sita"
                 )
                 if spouse_filter:
-                    show_conversion_indicator(spouse_filter, smart_convert_to_nepali(spouse_filter))
+                    converted = smart_convert_to_nepali(spouse_filter)
+                    if use_print_view and converted != spouse_filter:
+                        st.info(f"🔍 {converted}")
+                    elif not use_print_view:
+                        show_conversion_indicator(spouse_filter, converted)
                 
             with col2:
-                genders = ["सबै"] + list(set([g for g in df['लिङ्ग'].unique().tolist() if pd.notna(g)] + ["पुरुष", "महिला"]))
-                gender_filter = st.selectbox("लिङ्ग / Gender:", genders, key="adv_gender")
+                if use_print_view:
+                    # In print view, disable gender filter
+                    genders = ["सबै"] + list(set([g for g in df['लिङ्ग'].unique().tolist() if pd.notna(g)] + ["पुरुष", "महिला"]))
+                    gender_filter = st.selectbox("लिङ्ग / Gender:", genders, key="adv_gender", disabled=True)
+                else:
+                    # In table view, gender filter is enabled
+                    genders = ["सबै"] + list(set([g for g in df['लिङ्ग'].unique().tolist() if pd.notna(g)] + ["पुरुष", "महिला"]))
+                    gender_filter = st.selectbox("लिङ्ग / Gender:", genders, key="adv_gender")
                 ac1, ac2 = st.columns(2)
                 min_age_filter = ac1.number_input("Min Age:", value=0, key="adv_min")
                 max_age_filter = ac2.number_input("Max Age:", value=150, key="adv_max")
 
             if st.button("🔍 खोज्नुहोस् / Search", type="primary", use_container_width=True):
+                # Validation for print view - require at least one search field
+                if use_print_view:
+                    has_input = any([name_filter, parent_filter, spouse_filter])
+                    if not has_input:
+                        st.error("⚠️ कृपया खोज्नको लागि कम्तिमा एक फिल्ड भर्नुहोस् / Please fill at least one search field")
+                        st.stop()
+                
                 mask = pd.Series([True] * len(df), index=df.index)
                 
                 # Convert filters to Nepali before searching
@@ -1223,7 +1305,8 @@ Examples:
                 if spouse_filter:
                     spouse_nepali = smart_convert_to_nepali(spouse_filter)
                     mask &= (df['पति/पत्नीको नाम'] != '-') & df['पति/पत्नीको नाम_lower'].str.startswith(_normalize_unicode(spouse_nepali), na=False)
-                if gender_filter != "सबै":
+                # Only apply gender filter in table view (not disabled)
+                if not use_print_view and gender_filter != "सबै":
                     mask &= (df['लिङ्ग'] == gender_filter)
                 
                 age_ok = df['उमेर(वर्ष)'].notna()
@@ -1241,8 +1324,19 @@ Examples:
         
         elif search_option == "सबै डाटा हेर्नुहोस्":
             st.subheader("📜 सम्पूर्ण मतदाता सूची")
-            display_results(df, display_columns)
-            if not use_print_view:
+            
+            if use_print_view:
+                st.warning("⚠️ **Print View मा सबै डाटा देखाउन सकिँदैन**")
+                st.info("""
+                🖨️ **Print View** थर्मल प्रिन्टरको लागि हो।
+                
+                कृपया:
+                - अन्य खोज विकल्पबाट विशेष मतदाता खोज्नुहोस्, वा
+                - **Table View** मा स्विच गर्नुहोस् सबै डाटा हेर्न
+                """)
+                st.info(f"📊 कुल मतदाता संख्या: {len(df):,}")
+            else:
+                display_results(df, display_columns)
                 st.info(f"📊 कुल मतदाता संख्या: {len(df):,}")
         
         elif search_option == "मतदाताको नामबाट खोज्नुहोस्":
@@ -1264,7 +1358,12 @@ Examples:
             
             if search_name:
                 converted = smart_convert_to_nepali(search_name)
-                show_conversion_indicator(search_name, converted)
+                
+                # Show live conversion indicator
+                if use_print_view and converted != search_name:
+                    st.info(f"🔍 Searching for: **{converted}**")
+                elif not use_print_view:
+                    show_conversion_indicator(search_name, converted)
                 
                 filtered_df = unicode_prefix_search(df, 'मतदाताको नाम', search_name)
                 if not filtered_df.empty:
@@ -1273,6 +1372,8 @@ Examples:
                     display_results(filtered_df, display_columns)
                 else:
                     st.warning("⚠️ कुनै पनि मतदाता भेटिएन")
+            elif use_print_view:
+                st.info("💡 कृपया माथि मतदाताको नाम लेख्नुहोस् / Please enter voter name above")
         
         elif search_option == "मतदाता नंबरबाट खोज्नुहोस्":
             st.subheader("🔢 मतदाता नंबरबाट खोज्नुहोस्")
@@ -1287,6 +1388,8 @@ Examples:
                         st.warning("⚠️ कुनै पनि मतदाता भेटिएन")
                 except ValueError:
                     st.error("❌ Invalid number format")
+            elif use_print_view:
+                st.info("💡 कृपया माथि मतदाता नंबर लेख्नुहोस् / Please enter voter number above")
 
         elif search_option == "पिता/माताको नामबाट खोज्नुहोस्":
             st.subheader("👨‍👩‍👦 पिता/माताको नामबाट खोज्नुहोस्")
@@ -1298,7 +1401,14 @@ Examples:
                 placeholder="हरि or hari"
             )
             if search_parent:
-                show_conversion_indicator(search_parent, smart_convert_to_nepali(search_parent))
+                converted = smart_convert_to_nepali(search_parent)
+                
+                # Show live conversion indicator
+                if use_print_view and converted != search_parent:
+                    st.info(f"🔍 Searching for: **{converted}**")
+                elif not use_print_view:
+                    show_conversion_indicator(search_parent, converted)
+                
                 filtered_df = unicode_prefix_search(df, 'पिता/माताको नाम', search_parent)
                 if not filtered_df.empty:
                     if not use_print_view:
@@ -1306,6 +1416,8 @@ Examples:
                     display_results(filtered_df, display_columns)
                 else:
                     st.warning("⚠️ भेटिएन")
+            elif use_print_view:
+                st.info("💡 कृपया माथि पिता/माताको नाम लेख्नुहोस् / Please enter parent name above")
 
         elif search_option == "पति/पत्नीको नामबाट खोज्नुहोस्":
             st.subheader("💑 पति/पत्नीको नामबाट खोज्नुहोस्")
@@ -1317,7 +1429,14 @@ Examples:
                 placeholder="सीता or sita"
             )
             if search_spouse:
-                show_conversion_indicator(search_spouse, smart_convert_to_nepali(search_spouse))
+                converted = smart_convert_to_nepali(search_spouse)
+                
+                # Show live conversion indicator
+                if use_print_view and converted != search_spouse:
+                    st.info(f"🔍 Searching for: **{converted}**")
+                elif not use_print_view:
+                    show_conversion_indicator(search_spouse, converted)
+                
                 filtered_df = unicode_prefix_search(df, 'पति/पत्नीको नाम', search_spouse)
                 filtered_df = filtered_df[filtered_df['पति/पत्नीको नाम'] != '-']
                 if not filtered_df.empty:
@@ -1326,21 +1445,33 @@ Examples:
                     display_results(filtered_df, display_columns)
                 else:
                     st.warning("⚠️ भेटिएन")
+            elif use_print_view:
+                st.info("💡 कृपया माथि पति/पत्नीको नाम लेख्नुहोस् / Please enter spouse name above")
 
         elif search_option == "लिङ्गबाट फिल्टर गर्नुहोस्":
             st.subheader("⚧️ लिङ्गबाट फिल्टर गर्नुहोस्")
-            unique_genders = [g for g in df['लिङ्ग'].unique().tolist() if pd.notna(g)]
-            gender_options = ["सबै"] + list(set(unique_genders + ["पुरुष", "महिला"]))
-            selected_gender = st.selectbox("लिङ्ग छान्नुहोस्:", gender_options)
             
-            if selected_gender == "सबै":
-                filtered_df = df
+            if use_print_view:
+                st.warning("⚠️ **Print View मा लिङ्ग फिल्टर उपलब्ध छैन**")
+                st.info("""
+                🖨️ **Print View** मा लिङ्ग फिल्टर अक्षम गरिएको छ।
+                
+                कृपया:
+                - अन्य खोज विकल्प प्रयोग गर्नुहोस् (नाम, नंबर, आदि), वा
+                - **Table View** मा स्विच गर्नुहोस् लिङ्ग फिल्टर प्रयोग गर्न
+                """)
             else:
-                filtered_df = df[df['लिङ्ग'] == selected_gender]
-            
-            if not use_print_view:
+                unique_genders = [g for g in df['लिङ्ग'].unique().tolist() if pd.notna(g)]
+                gender_options = ["सबै"] + list(set(unique_genders + ["पुरुष", "महिला"]))
+                selected_gender = st.selectbox("लिङ्ग छान्नुहोस्:", gender_options)
+                
+                if selected_gender == "सबै":
+                    filtered_df = df
+                else:
+                    filtered_df = df[df['लिङ्ग'] == selected_gender]
+                
                 st.success(f"✅ {len(filtered_df):,} मतदाता भेटियो")
-            display_results(filtered_df, display_columns)
+                display_results(filtered_df, display_columns)
 
         elif search_option == "उमेर दायराबाट खोज्नुहोस्":
             st.subheader("📅 उमेर दायराबाट खोज्नुहोस्")
@@ -1352,28 +1483,12 @@ Examples:
             in_range = (df['उमेर(वर्ष)'] >= min_age) & (df['उमेर(वर्ष)'] <= max_age)
             filtered_df = df[age_ok & in_range]
             
-            if not use_print_view:
-                st.success(f"✅ {len(filtered_df):,} मतदाता भेटियो")
-            display_results(filtered_df, display_columns)
-
-        st.sidebar.markdown("---")
-        st.sidebar.subheader("📊 तथ्याङ्क / Statistics")
-        st.sidebar.metric("कुल मतदाता / Total", f"{len(df):,}")
-        
-        if 'उमेर(वर्ष)' in df.columns:
-            genz_voters = df[(df['उमेर(वर्ष)'] >= 18) & (df['उमेर(वर्ष)'] <= 29)]
-            st.sidebar.metric("👥 युवा (18-29)", f"{len(genz_voters):,}")
-        
-        if 'लिङ्ग' in df.columns:
-            st.sidebar.write("**लिङ्ग अनुसार:**")
-            gender_counts = df['लिङ्ग'].value_counts()
-            for gender, count in gender_counts.items():
-                percentage = (count / len(df) * 100)
-                st.sidebar.write(f"• {gender}: {count:,} ({percentage:.1f}%)")
-        
-        if 'उमेर(वर्ष)' in df.columns:
-            avg_age = df['उमेर(वर्ष)'].dropna().mean()
-            st.sidebar.metric("औसत उमेर / Avg Age", f"{avg_age:.1f} वर्ष" if not pd.isna(avg_age) else "—")
+            if filtered_df.empty:
+                st.warning("⚠️ यस उमेर दायरामा कुनै मतदाता भेटिएन")
+            else:
+                if not use_print_view:
+                    st.success(f"✅ {len(filtered_df):,} मतदाता भेटियो")
+                display_results(filtered_df, display_columns)
 
     except FileNotFoundError:
         st.error("❌ voterlist.xlsx not found. Please upload the file.")
