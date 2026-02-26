@@ -1107,25 +1107,37 @@ def show_results_table_with_print(data, columns):
     
     st.caption(f"📊 कुल मतदाता: {len(data):,}")
 
-    # OPTIMIZED: Build all cards in one HTML component for instant display
-    import html as html_module
-    
-    all_html = ['<style>.voter-card{background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);border-radius:12px;padding:20px;margin-bottom:15px;box-shadow:0 4px 15px rgba(102,126,234,.3);color:#fff;transition:all .3s}.voter-card:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(102,126,234,.5)}.voter-header{font-size:18px;font-weight:700;margin-bottom:15px;border-bottom:2px solid rgba(255,255,255,.3);padding-bottom:10px}.voter-info{margin:8px 0;font-size:14px;line-height:1.6}.voter-info strong{opacity:.8;margin-right:8px}.print-btn{background:#fff;color:#667eea;border:none;padding:12px 24px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;transition:all .3s;box-shadow:0 2px 8px rgba(0,0,0,.2);margin-top:10px}.print-btn:hover{transform:scale(1.05);box-shadow:0 4px 12px rgba(0,0,0,.3)}.print-btn:active{transform:scale(.98)}.print-btn:disabled{opacity:.6;cursor:not-allowed}.status-msg{padding:10px;border-radius:6px;font-size:12px;margin-top:8px;display:none}</style><script src="https://cdn.jsdelivr.net/npm/qz-tray@2.2.3/qz-tray.min.js"></script>']
-    
     for idx, row in data.iterrows():
         voter_name = row.get('मतदाताको नाम', 'N/A')
         voter_num = row.get('मतदाता नं', 'N/A')
         age = row.get('उमेर(वर्ष)', 'N/A')
         gender = row.get('लिङ्ग', 'N/A')
-        parent = row.get('पिता/माताको नाम', '-')
-        spouse = row.get('पति/पत्नीको नाम', '-')
-        voter_dict = row.to_dict()
-        html_receipt = format_voter_receipt_html(voter_dict)
-        html_escaped = html_module.escape(html_receipt).replace('\n','\\n').replace("'","\\'")
-        
-        all_html.append(f'''<div class="voter-card"><div class="voter-header">🗳️ {voter_name} — नं: {voter_num}</div><div class="voter-info"><strong>लिङ्ग:</strong> {gender}</div><div class="voter-info"><strong>उमेर:</strong> {age} वर्ष</div><div class="voter-info"><strong>पिता/माता:</strong> {parent}</div><div class="voter-info"><strong>पति/पत्नी:</strong> {spouse}</div><button class="print-btn" id="printBtn_{voter_num}" onclick="printVoter_{voter_num}()">🖨️ Print Slip</button><div class="status-msg" id="status_{voter_num}"></div></div><script>(function(){{const htmlContent='{html_escaped}';window.printVoter_{voter_num}=async function(){{const btn=document.getElementById('printBtn_{voter_num}');const status=document.getElementById('status_{voter_num}');function showStatus(msg,type){{const colors={{'info':'#3182ce','success':'#38a169','error':'#e53e3e'}};status.style.display='block';status.style.background=colors[type]+'22';status.style.border='2px solid '+colors[type];status.style.color=colors[type];status.innerHTML=msg}}try{{btn.disabled=true;showStatus('🔌 जडान गर्दै...','info');if(!qz.websocket.isActive()){{await qz.websocket.connect()}}const printers=await qz.printers.find();let printer=printers.find(p=>p.toLowerCase().includes('zkteco'))||printers[0];showStatus('🖨️ प्रिन्ट गर्दै...','info');const config=qz.configs.create(printer);await qz.print(config,[{{type:'pixel',format:'html',flavor:'plain',data:htmlContent}}]);showStatus('✅ सफल!','success');setTimeout(()=>{{btn.disabled=false;status.style.display='none'}},2000)}}catch(err){{let msg='❌ त्रुटि: ';if(err.message.includes('establish'))msg+='QZ Tray बन्द छ';else if(err.message.includes('find'))msg+='प्रिन्टर भेटिएन';else msg+=err.message;showStatus(msg,'error');btn.disabled=false}}}}}})();</script>''')
-    
-    st.components.v1.html('\n'.join(all_html), height=min(len(data)*280,5000), scrolling=True)
+
+        with st.expander(f"🗳️ {voter_name} — नं: {voter_num} | {gender}, {age} वर्ष", expanded=False):
+            col1, col2 = st.columns([3, 1])
+
+            with col1:
+                for col in columns:
+                    if col in row.index:
+                        value = row[col] if pd.notna(row[col]) else '-'
+                        st.text(f"{col}: {value}")
+
+            with col2:
+                voter_dict = row.to_dict()
+                
+                # Generate HTML receipt for image-based printing (most reliable for Nepali)
+                html_receipt = format_voter_receipt_html(voter_dict)
+                
+                # Print Slip button using IMAGE mode (renders HTML as image)
+                print_button_html = create_qz_print_button_image(voter_num, html_receipt)
+                st.components.v1.html(print_button_html, height=180, scrolling=False)
+                
+                st.markdown("---")
+                
+                # Original download button for thermal printer
+                receipt_text = format_voter_receipt(voter_dict)
+                download_button = _build_direct_download_button(receipt_text, voter_num, voter_name)
+                st.components.v1.html(download_button, height=120, scrolling=False)
 
 def show_results_table(data, columns):
     """Standard table display without print buttons."""
