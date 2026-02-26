@@ -25,6 +25,27 @@ import time
 import extra_streamlit_components as stx
 from credentials import USERNAME, PASSWORD
 from print_logic import format_voter_receipt, format_voter_receipt_html
+import warnings
+import sys
+
+# Suppress harmless WebSocket errors
+logging.getLogger('tornado.application').setLevel(logging.ERROR)
+logging.getLogger('tornado.general').setLevel(logging.ERROR)
+warnings.filterwarnings('ignore', category=DeprecationWarning)
+
+# Filter stderr to hide WebSocket closure messages
+class StderrFilter:
+    def __init__(self, original):
+        self.original = original
+    def write(self, text):
+        if 'WebSocketClosedError' not in text and 'Task exception' not in text:
+            self.original.write(text)
+    def flush(self):
+        if hasattr(self.original, 'flush'):
+            self.original.flush()
+
+if sys.stderr:
+    sys.stderr = StderrFilter(sys.stderr)
 
 # ============================================================================
 # IMPORT NEPALI CONVERTER
