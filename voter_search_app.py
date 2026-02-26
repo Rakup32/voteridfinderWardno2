@@ -15,8 +15,33 @@ Features:
 Author: Voter Search System
 Date: 2026-01-31
 """
-
+import os
+import sys
 import logging
+import warnings
+
+# Fix file watcher error
+os.environ.setdefault('STREAMLIT_SERVER_FILE_WATCHER_TYPE', 'none')
+warnings.filterwarnings('ignore')
+logging.getLogger('watchdog').setLevel(logging.ERROR)
+logging.getLogger('tornado').setLevel(logging.ERROR)
+
+# Fix WebSocket error
+class StderrFilter:
+    def __init__(self, original):
+        self.original = original
+        self.ignore = ['WebSocketClosedError', 'inotify', 'watchdog']
+    def write(self, text):
+        if not any(p in text for p in self.ignore):
+            self.original.write(text)
+    def flush(self):
+        if hasattr(self.original, 'flush'):
+            self.original.flush()
+
+if sys.stderr:
+    sys.stderr = StderrFilter(sys.stderr)
+
+
 import unicodedata
 import pandas as pd
 import streamlit as st
@@ -25,27 +50,7 @@ import time
 import extra_streamlit_components as stx
 from credentials import USERNAME, PASSWORD
 from print_logic import format_voter_receipt, format_voter_receipt_html
-import warnings
-import sys
 
-# Suppress harmless WebSocket errors
-logging.getLogger('tornado.application').setLevel(logging.ERROR)
-logging.getLogger('tornado.general').setLevel(logging.ERROR)
-warnings.filterwarnings('ignore', category=DeprecationWarning)
-
-# Filter stderr to hide WebSocket closure messages
-class StderrFilter:
-    def __init__(self, original):
-        self.original = original
-    def write(self, text):
-        if 'WebSocketClosedError' not in text and 'Task exception' not in text:
-            self.original.write(text)
-    def flush(self):
-        if hasattr(self.original, 'flush'):
-            self.original.flush()
-
-if sys.stderr:
-    sys.stderr = StderrFilter(sys.stderr)
 
 # ============================================================================
 # IMPORT NEPALI CONVERTER
